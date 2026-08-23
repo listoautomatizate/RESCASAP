@@ -1,0 +1,121 @@
+# RESCATA. — MVP Uruguay
+
+MVP funcional, responsive y mobile-first para rescatar excedentes de comercios uruguayos antes del cierre. La identidad es provisional y original; no replica la marca ni la interfaz de Too Good To Go o Buen Provecho.
+
+La propuesta de producto sigue tres capas:
+
+1. **Vender:** recuperar valor con packs de excedentes a precio rescate.
+2. **Redistribuir:** preparar la donación de lo apto que no se venda.
+3. **Aprender:** usar el historial para producir con menos merma.
+
+## Qué incluye
+
+### Consumidor
+
+- ingreso seguro y onboarding de una sola pantalla;
+- geolocalización opcional y orden por cercanía;
+- búsqueda y filtros por rubro;
+- listado, mapa, detalle, stock y precio actualizados;
+- precio habitual y precio rescate en UYU;
+- horario y dirección de retiro;
+- checkout de demostración con Mercado Pago o pago al retirar;
+- reserva persistente y código de retiro único;
+- cancelación, historial y métricas personales de kg, porciones y ahorro.
+
+### Comercio
+
+- onboarding para panadería, restaurante, cafetería, frutería, hotel o supermercado;
+- panel con packs activos, reservas, kg rescatados y valor recuperado;
+- alta de packs con cantidad, precio, peso estimado y franja de retiro;
+- plantillas recurrentes;
+- reducción automática opcional antes del cierre;
+- estados publicado, reservado/agostado, retirado, cancelado y no vendido;
+- validación del retiro por código;
+- base visual y de datos preparada para donación y analítica predictiva.
+
+## Ejecutar localmente
+
+Requisitos: Node.js 22.13 o superior y pnpm.
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Abrir `http://localhost:3000`.
+
+El entorno local de Sites inyecta una identidad de prueba y una base D1 local. En el primer ingreso se elige consumidor o comercio. Para verificar una reserva de punta a punta, se puede:
+
+1. entrar como consumidor y reservar un pack;
+2. copiar el código de retiro;
+3. cambiar a “Mi comercio” y publicar un pack propio;
+4. reservar ese pack desde el modo consumidor;
+5. volver al panel del comercio e ingresar el código en “Validar retiro”.
+
+## Comandos útiles
+
+```bash
+pnpm dev          # desarrollo local
+pnpm build        # compilación de producción
+pnpm lint         # revisión estática
+pnpm db:generate  # genera migraciones desde db/schema.ts
+```
+
+## Arquitectura
+
+- **Vinext + React + TypeScript:** interfaz y rutas de servidor compatibles con Cloudflare Workers.
+- **Cloudflare D1 / SQLite:** persistencia de perfiles, comercios, plantillas, packs y reservas.
+- **SIWC administrado por Sites:** identidad segura sin almacenar contraseñas en la aplicación.
+- **CSS propio:** diseño mobile-first sin depender de una biblioteca visual ni copiar una UX existente.
+- **API interna:** rutas pequeñas por dominio (`profile`, `packs`, `reservations`, `merchant`).
+
+### Estructura principal
+
+```text
+app/
+  api/                  rutas de lectura y mutación
+  chatgpt-auth.ts       identidad administrada por la plataforma
+  rescata-app.tsx       experiencia de consumidor y comercio
+  globals.css           sistema visual responsive
+db/
+  schema.ts             modelo relacional
+  bootstrap.ts          esquema y datos de demostración locales
+drizzle/                migraciones D1
+public/og.png           tarjeta social de marca
+.openai/hosting.json    bindings de despliegue
+```
+
+## Modelo de datos
+
+- `users`: identidad, rol y zona.
+- `businesses`: comercio, rubro, ubicación y propietario.
+- `pack_templates`: configuración recurrente de un pack.
+- `packs`: publicación diaria, stock, precios, horario, automatización y estado.
+- `reservations`: usuario, pack, importe, pago, código y estado de retiro.
+
+Los índices priorizan las consultas frecuentes: packs por estado/horario, packs y plantillas por comercio, reservas por usuario/fecha y reservas activas por pack.
+
+## Decisiones del MVP
+
+- El “pago con Mercado Pago” es una simulación de checkout: la reserva y su estado sí son reales, pero no se procesa dinero.
+- Se usa código visible de retiro, suficiente para el MVP y más fácil de operar que depender de la cámara; la estructura permite cambiarlo por QR firmado.
+- El contenido del pack es sorpresa, pero se comunica peso estimado y descripción para reducir incertidumbre.
+- La reducción automática se evalúa en horario de Uruguay cuando se consulta el inventario.
+- La geolocalización requiere consentimiento y no se persiste.
+- Donaciones y predicción aparecen como módulos futuros, sin agregar complejidad operativa prematura.
+
+## Próximos pasos para producción
+
+1. Integrar Mercado Pago Uruguay con webhooks idempotentes y conciliación.
+2. Separar usuarios y comercios en organizaciones con permisos de equipo.
+3. Firmar y escanear QR; registrar auditoría de cada cambio de estado.
+4. Agregar vencimiento automático, reembolsos y reglas de cancelación.
+5. Incorporar notificaciones push, email o WhatsApp transaccional.
+6. Revisar términos, bromatología, facturación, privacidad y operativa de donaciones con asesoría local.
+7. Conectar organizaciones habilitadas y trazabilidad para la capa de donación.
+8. Entrenar sugerencias de producción únicamente con suficiente historial y explicaciones visibles.
+9. Añadir monitoreo, backups, rate limiting, pruebas E2E y panel de soporte.
+
+## Estado de preparación
+
+La aplicación está lista para demos y validación de flujo. Antes de operar con público y pagos reales necesita las integraciones y revisiones del apartado anterior.

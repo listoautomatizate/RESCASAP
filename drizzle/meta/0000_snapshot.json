@@ -1,0 +1,529 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "6257a688-4c85-45fa-8477-cb0255ca0ff6",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "businesses": {
+      "name": "businesses",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "neighborhood": {
+          "name": "neighborhood",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 4.8
+        },
+        "closing_time": {
+          "name": "closing_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_businesses_owner_id": {
+          "name": "idx_businesses_owner_id",
+          "columns": [
+            "owner_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "pack_templates": {
+      "name": "pack_templates",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normal_price": {
+          "name": "normal_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rescue_price": {
+          "name": "rescue_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "estimated_kg": {
+          "name": "estimated_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pickup_start": {
+          "name": "pickup_start",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pickup_end": {
+          "name": "pickup_end",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auto_discount": {
+          "name": "auto_discount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "final_price": {
+          "name": "final_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "discount_minutes": {
+          "name": "discount_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_pack_templates_business_id": {
+          "name": "idx_pack_templates_business_id",
+          "columns": [
+            "business_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "packs": {
+      "name": "packs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normal_price": {
+          "name": "normal_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rescue_price": {
+          "name": "rescue_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_price": {
+          "name": "current_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity_total": {
+          "name": "quantity_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity_available": {
+          "name": "quantity_available",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "estimated_kg": {
+          "name": "estimated_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pickup_start": {
+          "name": "pickup_start",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pickup_end": {
+          "name": "pickup_end",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auto_discount": {
+          "name": "auto_discount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "final_price": {
+          "name": "final_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "discount_minutes": {
+          "name": "discount_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "visual_tone": {
+          "name": "visual_tone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'bread'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_packs_status_pickup_end": {
+          "name": "idx_packs_status_pickup_end",
+          "columns": [
+            "status",
+            "pickup_end"
+          ],
+          "isUnique": false
+        },
+        "idx_packs_business_id": {
+          "name": "idx_packs_business_id",
+          "columns": [
+            "business_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "reservations": {
+      "name": "reservations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pack_id": {
+          "name": "pack_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "unit_price": {
+          "name": "unit_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pickup_code": {
+          "name": "pickup_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payment_status": {
+          "name": "payment_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "collected_at": {
+          "name": "collected_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "reservations_pickup_code_unique": {
+          "name": "reservations_pickup_code_unique",
+          "columns": [
+            "pickup_code"
+          ],
+          "isUnique": true
+        },
+        "idx_reservations_user_id_created_at": {
+          "name": "idx_reservations_user_id_created_at",
+          "columns": [
+            "user_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_reservations_pack_id_status": {
+          "name": "idx_reservations_pack_id_status",
+          "columns": [
+            "pack_id",
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "neighborhood": {
+          "name": "neighborhood",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'Montevideo'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
