@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
 import { getAppUser } from '@/app/auth';
 import { LEGAL_VERSION } from '@/app/legal';
+import { mercadoPagoIsConfigured } from '@/app/mercadopago';
 import { ensureDatabase } from '@/db/bootstrap';
 
 export const dynamic = 'force-dynamic';
@@ -46,20 +47,30 @@ export async function GET() {
   const acceptedTypes = new Set(acceptedDocuments.results.map((row) => row.document_type));
   const legalAccepted = Boolean(profile) && acceptedTypes.has('terms') && acceptedTypes.has('privacy') &&
     (profile?.role !== 'merchant' || acceptedTypes.has('merchant_agreement'));
+  const mercadoPagoConfigured = mercadoPagoIsConfigured();
   const packs = await db.prepare(`SELECT p.*, b.name AS business_name, b.category, b.address, b.neighborhood,
-      b.latitude, b.longitude, b.rating, b.closing_time
+      b.latitude, b.longitude, b.rating, b.closing_time,
+      CASE WHEN mp.status = 'connected' THEN 1 ELSE 0 END AS mercado_pago_connected
     FROM packs p JOIN businesses b ON b.id = p.business_id
     LEFT JOIN merchant_applications a ON a.business_id = b.id
+    LEFT JOIN mercado_pago_connections mp ON mp.business_id = b.id
     WHERE b.owner_id IS NULL OR a.status = 'verified'
     ORDER BY CASE p.status WHEN 'published' THEN 0 ELSE 1 END, p.quantity_available ASC, p.pickup_end ASC`).all();
   const reservations = await db.prepare(`SELECT r.*, p.title, p.estimated_kg, p.pickup_start, p.pickup_end,
-      b.name AS business_name, b.address, b.neighborhood
+      b.name AS business_name, b.address, b.neighborhood, pt.status AS online_payment_status
     FROM reservations r JOIN packs p ON p.id = r.pack_id JOIN businesses b ON b.id = p.business_id
+    LEFT JOIN payment_transactions pt ON pt.reservation_id = r.id
     WHERE r.user_id = ? ORDER BY r.created_at DESC`).bind(authUser.userId).all();
   const merchantBusiness = await db.prepare('SELECT * FROM businesses WHERE owner_id = ? LIMIT 1')
     .bind(authUser.userId).first();
   const merchantApplication = merchantBusiness && typeof merchantBusiness.id === 'string'
     ? await db.prepare('SELECT * FROM merchant_applications WHERE business_id = ?').bind(merchantBusiness.id).first()
+    : null;
+  const merchantConnection = merchantBusiness && typeof merchantBusiness.id === 'string'
+    ? await db.prepare(`SELECT mp_user_id, status, expires_at, connected_at, updated_at
+      FROM mercado_pago_connections WHERE business_id = ?`).bind(merchantBusiness.id).first<{
+        mp_user_id: string; status: string; expires_at: string; connected_at: string; updated_at: string;
+      }>()
     : null;
   let merchantPacks: unknown[] = [];
   let templates: unknown[] = [];
@@ -79,10 +90,18 @@ export async function GET() {
     authUser,
     profile,
     legalAccepted,
-    packs: packs.results,
+    packs: packs.results.map((pack) => ({
+      ...pack,
+      mercado_pago_enabled: mercadoPagoConfigured && Boolean(pack.mercado_pago_connected),
+    })),
     reservations: reservations.results,
     merchantBusiness,
     merchantApplication,
+    merchantPayment: {
+      configured: mercadoPagoConfigured,
+      status: merchantConnection?.status ?? 'not_connected',
+      connectedAt: merchantConnection?.connected_at ?? null,
+    },
     merchantPacks,
     templates,
   });

@@ -98,3 +98,36 @@ export const merchantApplications = sqliteTable('merchant_applications', {
   acceptedAt: text('accepted_at').notNull(),
   reviewedAt: text('reviewed_at'),
 });
+
+export const mercadoPagoConnections = sqliteTable('mercado_pago_connections', {
+  businessId: text('business_id').primaryKey(),
+  mpUserId: text('mp_user_id').notNull(),
+  accessTokenEncrypted: text('access_token_encrypted').notNull(),
+  refreshTokenEncrypted: text('refresh_token_encrypted'),
+  expiresAt: text('expires_at').notNull(),
+  scope: text('scope'),
+  status: text('status', { enum: ['connected', 'expired', 'revoked'] }).notNull().default('connected'),
+  connectedAt: text('connected_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [index('idx_mp_connections_user_id').on(table.mpUserId)]);
+
+export const paymentTransactions = sqliteTable('payment_transactions', {
+  id: text('id').primaryKey(),
+  reservationId: text('reservation_id').notNull().unique(),
+  businessId: text('business_id').notNull(),
+  provider: text('provider').notNull().default('mercadopago'),
+  externalReference: text('external_reference').notNull().unique(),
+  providerOrderId: text('provider_order_id').unique(),
+  checkoutUrl: text('checkout_url'),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  amount: integer('amount').notNull(),
+  marketplaceFee: integer('marketplace_fee').notNull().default(0),
+  status: text('status', { enum: ['initiating', 'created', 'processing', 'paid', 'failed', 'cancelled', 'refunded'] }).notNull(),
+  statusDetail: text('status_detail'),
+  stockReleasedAt: text('stock_released_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  index('idx_payment_transactions_order').on(table.providerOrderId),
+  index('idx_payment_transactions_business_status').on(table.businessId, table.status),
+]);

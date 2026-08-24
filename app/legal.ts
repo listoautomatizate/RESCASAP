@@ -1,4 +1,4 @@
-export const LEGAL_VERSION = '2026-08-24';
+export const LEGAL_VERSION = '2026-08-24.2';
 
 export const COMPANY = {
   legalName: 'Lia Hannay Dietrich — Empresa Unipersonal',

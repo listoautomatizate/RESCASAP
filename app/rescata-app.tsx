@@ -11,11 +11,13 @@ type Pack = {
   estimated_kg: number; pickup_start: string; pickup_end: string; status: 'published' | 'sold_out' | 'cancelled' | 'unsold';
   auto_discount: number; final_price: number | null; discount_minutes: number | null; visual_tone: string;
   address: string; neighborhood: string; latitude: number; longitude: number; rating: number;
+  mercado_pago_enabled: boolean;
 };
 type Reservation = {
   id: string; pack_id: string; title: string; business_name: string; address: string; neighborhood: string;
   pickup_start: string; pickup_end: string; pickup_code: string; unit_price: number; quantity: number;
   status: 'reserved' | 'collected' | 'cancelled' | 'no_show'; payment_status: 'paid' | 'pay_at_store' | 'refunded';
+  online_payment_status: 'initiating' | 'created' | 'processing' | 'paid' | 'failed' | 'cancelled' | 'refunded' | null;
   estimated_kg?: number; created_at: string;
 };
 type MerchantPack = Pack & { reservation_count: number; revenue: number };
@@ -25,9 +27,11 @@ type Template = {
 };
 type Business = { id: string; name: string; category: string; address: string; neighborhood: string };
 type MerchantApplication = { status: 'pending' | 'verified' | 'rejected'; legal_name: string; rut: string; habilitation_number: string };
+type MerchantPayment = { configured: boolean; status: 'not_connected' | 'connected' | 'expired' | 'revoked'; connectedAt: string | null };
 type BootstrapData = {
   authUser: AppUser; profile: Profile | null; legalAccepted: boolean; packs: Pack[]; reservations: Reservation[];
-  merchantBusiness: Business | null; merchantApplication: MerchantApplication | null; merchantPacks: MerchantPack[]; templates: Template[];
+  merchantBusiness: Business | null; merchantApplication: MerchantApplication | null; merchantPayment: MerchantPayment;
+  merchantPacks: MerchantPack[]; templates: Template[];
 };
 type View = 'explore' | 'map' | 'history' | 'impact' | 'merchant';
 
@@ -94,7 +98,7 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
   const [sheet, setSheet] = useState<'detail' | 'checkout' | 'success' | 'create' | null>(null);
   const [activeReservation, setActiveReservation] = useState<Reservation | null>(null);
-  const [paymentMethod] = useState<'paid' | 'pay_at_store'>('pay_at_store');
+  const [paymentMethod, setPaymentMethod] = useState<'paid' | 'pay_at_store'>('pay_at_store');
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todos');
@@ -132,6 +136,28 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     const timer = window.setTimeout(() => setToast(''), 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('mp_connected');
+    const paymentError = params.get('mp_error');
+    if (!connected && !paymentError) return;
+    const timer = window.setTimeout(() => {
+      if (connected) setToast('Mercado Pago quedó vinculado al comercio.');
+      else {
+        const message = paymentError === 'verificacion'
+          ? 'Primero debemos verificar el comercio.'
+          : paymentError === 'configuracion'
+            ? 'La activación central de Mercado Pago todavía está pendiente.'
+            : 'No pudimos completar la vinculación con Mercado Pago.';
+        setToast(message);
+      }
+      setView('merchant');
+      window.history.replaceState({}, '', '/');
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
 
   const visiblePacks = useMemo(() => {
     if (!data) return [];
@@ -237,8 +263,15 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     if (!selectedPack) return;
     setBusy(true); setError('');
     try {
+      if (paymentMethod === 'paid') {
+        const result = await api<{ checkoutUrl: string }>('/api/payments/mercadopago', {
+          method: 'POST', body: JSON.stringify({ packId: selectedPack.id }),
+        });
+        window.location.assign(result.checkoutUrl);
+        return;
+      }
       const result = await api<{ reservation: Reservation }>('/api/reservations', {
-        method: 'POST', body: JSON.stringify({ packId: selectedPack.id, paymentMethod }),
+        method: 'POST', body: JSON.stringify({ packId: selectedPack.id, paymentMethod: 'pay_at_store' }),
       });
       setActiveReservation(result.reservation); setSheet('success'); await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos reservar.'); }
@@ -246,7 +279,8 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
   }
 
   async function cancelReservation(reservation: Reservation) {
-    if (!window.confirm('¿Querés cancelar este rescate? El pack volverá a quedar disponible.')) return;
+    const onlinePaid = reservation.online_payment_status === 'paid';
+    if (!window.confirm(onlinePaid ? '¿Querés cancelar? Solicitaremos la devolución a Mercado Pago.' : '¿Querés cancelar este rescate? El pack volverá a quedar disponible.')) return;
     setBusy(true);
     try {
       await api(`/api/reservations/${reservation.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
@@ -378,10 +412,10 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
         </div>
       </header>
 
-      <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios identificados como DEMO son ejemplos y no ofrecen retiros reales. El pago disponible en esta etapa es al retirar.</span></aside>
+      <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios DEMO son ejemplos. En comercios verificados podés pagar al retirar y, cuando lo vinculen, también con Mercado Pago.</span></aside>
 
       {isMerchant ? (
-        <MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed ?? null); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} onApply={applyAsMerchant} />
+        <><MerchantPaymentBar data={data}/><MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed ?? null); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} onApply={applyAsMerchant} /></>
       ) : view === 'explore' ? (
         <>
           <section className="hero" id="inicio">
@@ -439,8 +473,8 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
       <LegalFooter />
 
       {sheet && <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) { setSheet(null); setError(''); } }}>
-        {sheet === 'detail' && selectedPack && <PackDetail pack={selectedPack} location={location} onClose={() => setSheet(null)} onCheckout={() => setSheet('checkout')} />}
-        {sheet === 'checkout' && selectedPack && <Checkout pack={selectedPack} paymentMethod={paymentMethod} busy={busy} error={error} onBack={() => setSheet('detail')} onReserve={reserve} />}
+        {sheet === 'detail' && selectedPack && <PackDetail pack={selectedPack} location={location} onClose={() => setSheet(null)} onCheckout={() => { setPaymentMethod('pay_at_store'); setSheet('checkout'); }} />}
+        {sheet === 'checkout' && selectedPack && <Checkout pack={selectedPack} paymentMethod={paymentMethod} onPaymentMethod={setPaymentMethod} busy={busy} error={error} onBack={() => setSheet('detail')} onReserve={reserve} />}
         {sheet === 'success' && activeReservation && <ReservationTicket reservation={activeReservation} onClose={() => { setSheet(null); setActiveReservation(null); }} />}
         {sheet === 'create' && <CreatePack business={data.merchantBusiness} templates={data.templates} seed={templateSeed} busy={busy} error={error} onClose={() => { setSheet(null); setTemplateSeed(null); setError(''); }} onSubmit={createPack} />}
       </div>}
@@ -461,18 +495,19 @@ function PackDetail({ pack, location, onClose, onCheckout }: { pack: Pack; locat
     </div></section>;
 }
 
-function Checkout({ pack, paymentMethod, busy, error, onBack, onReserve }: { pack: Pack; paymentMethod: 'paid' | 'pay_at_store'; busy: boolean; error: string; onBack: () => void; onReserve: () => void }) {
+function Checkout({ pack, paymentMethod, onPaymentMethod, busy, error, onBack, onReserve }: { pack: Pack; paymentMethod: 'paid' | 'pay_at_store'; onPaymentMethod: (method: 'paid' | 'pay_at_store') => void; busy: boolean; error: string; onBack: () => void; onReserve: () => void }) {
+  const onlineAvailable = pack.mercado_pago_enabled && !demoBusinessIds.has(pack.business_id);
   return <section className="sheet checkout-sheet"><header><button className="back-button" onClick={onBack}>←</button><div><p className="eyebrow dark">ÚLTIMO PASO</p><h2>Confirmá tu rescate</h2></div></header><div className="checkout-pack"><span>{toneMarks[pack.visual_tone] ?? '🥡'}</span><div><b>{pack.title}</b><small>{pack.business_name} · Retiro {pack.pickup_start}–{pack.pickup_end}</small></div><strong>{money(pack.current_price)}</strong></div>
-    <fieldset className="payment-options"><legend>Forma de pago</legend><label className="selected"><input type="radio" checked={paymentMethod === 'pay_at_store'} readOnly/><span><b>Pago al retirar</b><small>Pagás directamente en el comercio cuando recibís el pack.</small></span><em>$</em></label><label className="coming-soon"><input type="radio" disabled/><span><b>Mercado Pago</b><small>Próximamente, cuando cada comercio vincule su cuenta.</small></span><em>MP</em></label></fieldset>
+    <fieldset className="payment-options"><legend>Forma de pago</legend><label className={paymentMethod === 'pay_at_store' ? 'selected' : ''}><input type="radio" name="payment" checked={paymentMethod === 'pay_at_store'} onChange={() => onPaymentMethod('pay_at_store')}/><span><b>Pago al retirar</b><small>Pagás directamente en el comercio cuando recibís el pack.</small></span><em>$</em></label><label className={`${paymentMethod === 'paid' ? 'selected' : ''} ${onlineAvailable ? '' : 'coming-soon'}`}><input type="radio" name="payment" checked={paymentMethod === 'paid'} onChange={() => onPaymentMethod('paid')} disabled={!onlineAvailable}/><span><b>Mercado Pago</b><small>{onlineAvailable ? 'Pagás en el entorno seguro de Mercado Pago. RESCASAP no recibe los datos de tu tarjeta.' : 'Disponible cuando este comercio vincule su cuenta.'}</small></span><em>MP</em></label></fieldset>
     {demoBusinessIds.has(pack.business_id) && <div className="demo-warning"><b>PRUEBA SIN RETIRO</b><span>Esta reserva es demostrativa y no genera una compra ni un retiro real.</span></div>}
     <div className="checkout-summary"><p><span>1 pack</span><b>{money(pack.current_price)}</b></p><p><span>Cargo de servicio</span><b>$ 0</b></p><p className="total"><span>Total</span><b>{money(pack.current_price)}</b></p></div>
-    <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa, debo retirar dentro del horario y se aplican los <a href="/terminos" target="_blank">términos</a>.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? 'Reservando…' : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : 'Confirmar reserva'} <span>→</span></button>
+    <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa, debo retirar dentro del horario y se aplican los <a href="/terminos" target="_blank">términos</a>.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? (paymentMethod === 'paid' ? 'Abriendo Mercado Pago…' : 'Reservando…') : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : paymentMethod === 'paid' ? 'Pagar con Mercado Pago' : 'Confirmar reserva'} <span>→</span></button>
   </section>;
 }
 
 function ReservationTicket({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
   const isDemo = demoPackIds.has(reservation.pack_id);
-  return <section className="sheet ticket-sheet"><button className="sheet-close" onClick={onClose}>×</button><div className="success-mark">✓</div><p className="eyebrow dark">{isDemo ? 'PRUEBA COMPLETADA' : 'RESCATE CONFIRMADO'}</p><h2>{isDemo ? 'Así funciona una reserva' : '¡Ese pack es tuyo!'}</h2><p>{isDemo ? 'Este código demuestra el flujo. No concurras al comercio ni realices ningún pago.' : 'Mostrá este código cuando llegues. El comercio lo valida y listo.'}</p><CodeGrid code={reservation.pickup_code}/><strong className="pickup-code">{reservation.pickup_code}</strong><div className="ticket-info"><p><span>Comercio</span><b>{reservation.business_name}{isDemo ? ' · DEMO' : ''}</b></p><p><span>Retiro</span><b>{isDemo ? 'Sin retiro real' : `Hoy · ${reservation.pickup_start}–${reservation.pickup_end}`}</b></p><p><span>Dirección</span><b>{isDemo ? 'Ubicación de ejemplo' : `${reservation.address}, ${reservation.neighborhood}`}</b></p><p><span>Pago</span><b>{isDemo ? 'No corresponde' : reservation.payment_status === 'paid' ? `${money(reservation.unit_price)} · Pagado` : `${money(reservation.unit_price)} · Al retirar`}</b></p></div><button className="primary-cta" onClick={onClose}>Listo <span>✓</span></button></section>;
+  return <section className="sheet ticket-sheet"><button className="sheet-close" onClick={onClose}>×</button><div className="success-mark">✓</div><p className="eyebrow dark">{isDemo ? 'PRUEBA COMPLETADA' : 'RESCATE CONFIRMADO'}</p><h2>{isDemo ? 'Así funciona una reserva' : '¡Ese pack es tuyo!'}</h2><p>{isDemo ? 'Este código demuestra el flujo. No concurras al comercio ni realices ningún pago.' : 'Mostrá este código cuando llegues. El comercio lo valida y listo.'}</p><CodeGrid code={reservation.pickup_code}/><strong className="pickup-code">{reservation.pickup_code}</strong><div className="ticket-info"><p><span>Comercio</span><b>{reservation.business_name}{isDemo ? ' · DEMO' : ''}</b></p><p><span>Retiro</span><b>{isDemo ? 'Sin retiro real' : `Hoy · ${reservation.pickup_start}–${reservation.pickup_end}`}</b></p><p><span>Dirección</span><b>{isDemo ? 'Ubicación de ejemplo' : `${reservation.address}, ${reservation.neighborhood}`}</b></p><p><span>Pago</span><b>{isDemo ? 'No corresponde' : reservation.online_payment_status === 'paid' ? `${money(reservation.unit_price)} · Mercado Pago` : reservation.payment_status === 'paid' ? `${money(reservation.unit_price)} · Pagado` : `${money(reservation.unit_price)} · Al retirar`}</b></p></div><button className="primary-cta" onClick={onClose}>Listo <span>✓</span></button></section>;
 }
 
 function MapView({ packs, onSelect, onLocate, locationLabel }: { packs: Pack[]; onSelect: (pack: Pack) => void; onLocate: () => void; locationLabel: string }) {
@@ -480,11 +515,17 @@ function MapView({ packs, onSelect, onLocate, locationLabel }: { packs: Pack[]; 
 }
 
 function HistoryView({ reservations, onOpen, onCancel }: { reservations: Reservation[]; onOpen: (item: Reservation) => void; onCancel: (item: Reservation) => void }) {
-  return <section className="simple-page"><div className="page-title"><p className="eyebrow dark">TU HISTORIAL</p><h1>Mis rescates</h1><p>Todo lo que evitaste que se desperdiciara.</p></div>{reservations.length ? <div className="history-list">{reservations.map((item) => <article key={item.id}><div className={`history-mark ${item.status}`}>{item.status === 'collected' ? '✓' : item.status === 'reserved' ? '▦' : '×'}</div><div><span className={`status-chip ${item.status}`}>{statusCopy[item.status]}</span><h3>{item.title}</h3><p>{item.business_name} · {item.pickup_start}–{item.pickup_end}</p><small>{new Date(item.created_at).toLocaleDateString('es-UY')}</small></div><div className="history-actions"><b>{money(item.unit_price)}</b>{item.status === 'reserved' && <><button onClick={() => onOpen(item)}>Ver código</button><button className="danger-link" onClick={() => onCancel(item)}>Cancelar</button></>}</div></article>)}</div> : <div className="empty-state"><b>Todavía no hiciste tu primer rescate.</b><p>Cuando reserves un pack, va a aparecer acá.</p></div>}</section>;
+  return <section className="simple-page"><div className="page-title"><p className="eyebrow dark">TU HISTORIAL</p><h1>Mis rescates</h1><p>Todo lo que evitaste que se desperdiciara.</p></div>{reservations.length ? <div className="history-list">{reservations.map((item) => <article key={item.id}><div className={`history-mark ${item.status}`}>{item.status === 'collected' ? '✓' : item.status === 'reserved' ? '▦' : '×'}</div><div><span className={`status-chip ${item.status}`}>{statusCopy[item.status]}</span><h3>{item.title}</h3><p>{item.business_name} · {item.pickup_start}–{item.pickup_end}</p><small>{new Date(item.created_at).toLocaleDateString('es-UY')} · {item.online_payment_status === 'paid' ? 'Mercado Pago acreditado' : item.online_payment_status && ['initiating', 'created', 'processing'].includes(item.online_payment_status) ? 'Pago en proceso' : item.payment_status === 'pay_at_store' ? 'Pago al retirar' : 'Pago devuelto'}</small></div><div className="history-actions"><b>{money(item.unit_price)}</b>{item.status === 'reserved' && <><button onClick={() => onOpen(item)}>Ver código</button><button className="danger-link" onClick={() => onCancel(item)}>Cancelar</button></>}</div></article>)}</div> : <div className="empty-state"><b>Todavía no hiciste tu primer rescate.</b><p>Cuando reserves un pack, va a aparecer acá.</p></div>}</section>;
 }
 
 function ImpactView({ impact, profile, onSignOut, busy }: { impact: { kg: number; saved: number; count: number }; profile: Profile; onSignOut: () => void; busy: boolean }) {
   return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p><button className="signout-button" disabled={busy} onClick={onSignOut}>Cerrar sesión</button></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Vender mejor el excedente</b><p>Detectar qué horarios, precios y packs encuentran salida más rápido.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. Consultá nuestra <a href="/privacidad">política de privacidad</a>.</p></section>;
+}
+
+function MerchantPaymentBar({ data }: { data: BootstrapData }) {
+  if (data.merchantApplication?.status !== 'verified') return null;
+  const connected = data.merchantPayment.configured && data.merchantPayment.status === 'connected';
+  return <section className={`payment-connect-bar ${connected ? 'connected' : ''}`}><div><p className="eyebrow dark">COBROS ONLINE</p><h2>Mercado Pago</h2><span>Cada comercio cobra en su propia cuenta. RESCASAP no ve ni guarda datos de tarjetas.</span></div>{connected ? <div className="payment-connect-action"><b><i/> Cuenta vinculada</b><a href="/api/merchant/mercadopago/start">Volver a vincular →</a></div> : data.merchantPayment.configured ? <a className="connect-payment-button" href="/api/merchant/mercadopago/start">Vincular mi cuenta →</a> : <button disabled>Activación central pendiente</button>}</section>;
 }
 
 function MerchantDashboard({ data, busy, onCreate, onStatus, onCollect, onApply }: { data: BootstrapData; busy: boolean; onCreate: (seed?: Partial<Template> | null) => void; onStatus: (pack: MerchantPack, status: 'published' | 'cancelled' | 'unsold') => void; onCollect: (event: FormEvent<HTMLFormElement>) => void; onApply: (event: FormEvent<HTMLFormElement>) => void }) {

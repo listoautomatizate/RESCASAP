@@ -95,6 +95,34 @@ async function initialize() {
       accepted_at TEXT NOT NULL,
       reviewed_at TEXT
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS mercado_pago_connections (
+      business_id TEXT PRIMARY KEY,
+      mp_user_id TEXT NOT NULL,
+      access_token_encrypted TEXT NOT NULL,
+      refresh_token_encrypted TEXT,
+      expires_at TEXT NOT NULL,
+      scope TEXT,
+      status TEXT NOT NULL DEFAULT 'connected' CHECK(status IN ('connected','expired','revoked')),
+      connected_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS payment_transactions (
+      id TEXT PRIMARY KEY,
+      reservation_id TEXT NOT NULL UNIQUE,
+      business_id TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'mercadopago',
+      external_reference TEXT NOT NULL UNIQUE,
+      provider_order_id TEXT UNIQUE,
+      checkout_url TEXT,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      amount INTEGER NOT NULL,
+      marketplace_fee INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK(status IN ('initiating','created','processing','paid','failed','cancelled','refunded')),
+      status_detail TEXT,
+      stock_released_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON businesses(owner_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_pack_templates_business_id ON pack_templates(business_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_packs_status_pickup_end ON packs(status, pickup_end)'),
@@ -102,6 +130,9 @@ async function initialize() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reservations_user_id_created_at ON reservations(user_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reservations_pack_id_status ON reservations(pack_id, status)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user_document ON legal_acceptances(user_id, document_type, document_version)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_mp_connections_user_id ON mercado_pago_connections(mp_user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_payment_transactions_order ON payment_transactions(provider_order_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_payment_transactions_business_status ON payment_transactions(business_id, status)'),
     db.prepare('PRAGMA optimize'),
   ]);
 

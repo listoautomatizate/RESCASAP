@@ -18,7 +18,7 @@ La propuesta de producto sigue tres capas:
 - listado, mapa, detalle, stock y precio actualizados;
 - precio habitual y precio rescate en UYU;
 - horario y dirección de retiro;
-- reserva con pago al retirar; Mercado Pago queda visible como integración futura;
+- reserva con pago al retirar o Checkout Pro de Mercado Pago cuando el comercio lo haya vinculado;
 - reserva persistente y código de retiro único;
 - cancelación, historial y métricas personales de kg, porciones y ahorro.
 
@@ -32,6 +32,7 @@ La propuesta de producto sigue tres capas:
 - estados publicado, reservado/agostado, retirado, cancelado y no vendido;
 - validación del retiro por código;
 - control de solicitud, aceptación contractual y verificación previa del comercio;
+- vinculación OAuth de la cuenta propia de Mercado Pago y cobro directo del comercio;
 - base visual y de datos preparada para analítica predictiva.
 
 ## Ejecutar localmente
@@ -67,6 +68,7 @@ pnpm db:generate  # genera migraciones desde db/schema.ts
 - **Vinext + React + TypeScript:** interfaz y rutas de servidor compatibles con Cloudflare Workers.
 - **Cloudflare D1 / SQLite:** persistencia de perfiles, comercios, plantillas, packs y reservas.
 - **Supabase Auth:** acceso sin contraseña mediante enlace mágico enviado al email; la aplicación valida la identidad en el servidor.
+- **Mercado Pago Checkout Pro + Split 1:1:** cada comercio autoriza su propia cuenta; el checkout procesa el pago fuera de RESCASAP y devuelve una orden conciliada por webhook.
 - **CSS propio:** diseño mobile-first sin depender de una biblioteca visual ni copiar una UX existente.
 - **API interna:** rutas pequeñas por dominio (`profile`, `packs`, `reservations`, `merchant`).
 
@@ -77,6 +79,7 @@ app/
   api/                  rutas de lectura y mutación
   auth.ts               validación de identidad de Supabase
   auth/callback/        confirmación del enlace enviado por email
+  pago/[id]/            regreso seguro y estado conciliado del pago
   terminos/             términos y condiciones públicos
   privacidad/           política de privacidad pública
   comercios/            acuerdo electrónico para comercios
@@ -96,13 +99,17 @@ public/og.png           tarjeta social de marca
 - `businesses`: comercio, rubro, ubicación y propietario.
 - `pack_templates`: configuración recurrente de un pack.
 - `packs`: publicación diaria, stock, precios, horario, automatización y estado.
-- `reservations`: usuario, pack, importe, pago, código y estado de retiro.
+- `reservations`: usuario, pack, importe, código y estado de retiro.
+- `mercado_pago_connections`: autorización cifrada y renovable de cada comercio.
+- `payment_transactions`: orden, idempotencia, importe, comisión y estado conciliado.
 
 Los índices priorizan las consultas frecuentes: packs por estado/horario, packs y plantillas por comercio, reservas por usuario/fecha y reservas activas por pack.
 
 ## Decisiones del MVP
 
-- El MVP público comienza únicamente con pago al retirar; Mercado Pago no procesa dinero todavía.
+- Pago al retirar permanece siempre disponible; Mercado Pago solo aparece en comercios verificados que hayan vinculado su cuenta.
+- El piloto usa una comisión de plataforma de 0%; puede configurarse más adelante sin cambiar el flujo de cobro.
+- La URL de regreso nunca se toma como prueba de pago: el servidor consulta la orden y valida webhooks firmados.
 - Se usa código visible de retiro, suficiente para el MVP y más fácil de operar que depender de la cámara; la estructura permite cambiarlo por QR firmado.
 - El contenido del pack es sorpresa, pero se comunica peso estimado y descripción para reducir incertidumbre.
 - La reducción automática se evalúa en horario de Uruguay cuando se consulta el inventario.
@@ -112,15 +119,44 @@ Los índices priorizan las consultas frecuentes: packs por estado/horario, packs
 
 ## Próximos pasos para producción
 
-1. Integrar Mercado Pago Uruguay con webhooks idempotentes y conciliación.
-2. Separar usuarios y comercios en organizaciones con permisos de equipo.
-3. Firmar y escanear QR; registrar auditoría de cada cambio de estado.
-4. Agregar vencimiento automático, reembolsos y reglas de cancelación.
-5. Incorporar notificaciones push, email o WhatsApp transaccional.
-6. Completar la inscripción de bases de datos ante la URCDP y revisar la documentación legal con asesoría local.
-7. Entrenar sugerencias de producción únicamente con suficiente historial y explicaciones visibles.
-8. Añadir monitoreo, backups, rate limiting, pruebas E2E y panel de soporte.
+1. Separar usuarios y comercios en organizaciones con permisos de equipo.
+2. Firmar y escanear QR; registrar auditoría de cada cambio de estado.
+3. Incorporar notificaciones push, email o WhatsApp transaccional.
+4. Obtener la resolución del trámite de inscripción de bases ante la URCDP y revisar contratos con asesoría local.
+5. Entrenar sugerencias de producción únicamente con suficiente historial y explicaciones visibles.
+6. Añadir monitoreo, restauración ensayada, rate limiting, pruebas E2E y panel de soporte.
 
 ## Estado de preparación
 
-La aplicación está lista como piloto público y para validar el flujo. Los comercios de muestra están identificados como DEMO y no generan retiros reales. Antes de cobrar en línea necesita las integraciones y revisiones del apartado anterior.
+La aplicación está lista como piloto público y para validar el flujo. Los comercios de muestra están identificados como DEMO y no generan retiros reales. El código de Mercado Pago queda inactivo hasta cargar las credenciales de la aplicación y el secreto de webhooks.
+
+## Activar Mercado Pago en producción
+
+Crear una aplicación de Checkout Pro para marketplace en Mercado Pago Uruguay, habilitar OAuth con PKCE y Split 1:1, y registrar:
+
+- URL de redirección: `https://rescasap.uy/api/merchant/mercadopago/callback`
+- Webhook de órdenes: `https://rescasap.uy/api/webhooks/mercadopago`
+
+Variables secretas del sitio:
+
+```text
+MP_CLIENT_ID
+MP_CLIENT_SECRET
+MP_WEBHOOK_SECRET
+MP_TOKEN_ENCRYPTION_KEY   # 32 bytes aleatorios codificados en base64url
+MP_OAUTH_REDIRECT_URI=https://rescasap.uy/api/merchant/mercadopago/callback
+MP_MARKETPLACE_FEE_PERCENT=0
+```
+
+`MP_CLIENT_SECRET`, `MP_WEBHOOK_SECRET` y `MP_TOKEN_ENCRYPTION_KEY` son exclusivamente de servidor: nunca deben agregarse al repositorio ni exponerse en el navegador. Cada comercio verificado entra a “Mi comercio”, pulsa “Vincular mi cuenta” y autoriza RESCASAP. Mercado Pago exige que la cuenta vendedora complete sus verificaciones de identidad.
+
+## Seguridad y operación
+
+- Las tarjetas se ingresan y procesan en Mercado Pago; RESCASAP no las recibe.
+- Los tokens OAuth de los comercios se cifran con AES-GCM antes de persistirse.
+- Las órdenes usan clave de idempotencia para evitar cobros duplicados.
+- Cada webhook se valida por HMAC y luego se vuelve a consultar la orden a Mercado Pago.
+- Las sesiones usan cookies `HttpOnly`, `Secure` y `SameSite=Lax` en producción.
+- D1 cifra los datos almacenados y el tráfico; Supabase mantiene la identidad de acceso.
+
+Ninguna aplicación conectada a internet puede garantizar riesgo cero. Antes de crecer se deben activar SMTP propio, protección anti-bots y límites de uso, alertas, copias/restauración verificadas, revisión periódica de dependencias y una evaluación de seguridad independiente.
