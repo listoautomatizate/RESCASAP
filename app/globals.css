@@ -173,6 +173,13 @@ input, select, textarea { font: inherit; }
 .auth-copy > p:not(.eyebrow) { max-width: 500px; margin: 28px 0; color: #c7c1b9; line-height: 1.6; }
 .primary-cta { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 52px; border: 1px solid var(--ink); background: var(--lime); color: var(--ink); padding: 12px 16px; font-size: 13px; font-weight: 950; text-decoration: none; box-shadow: 4px 4px 0 var(--ink); }
 .auth-copy .primary-cta { max-width: 400px; border-color: var(--paper); box-shadow: 4px 4px 0 var(--paper); }
+.email-login { width: min(100%,460px); }
+.email-login > label { display: block; margin-bottom: 7px; color: #c7c1b9; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.email-login > div { display: grid; grid-template-columns: 1fr auto; border: 1px solid var(--paper); background: var(--paper); box-shadow: 4px 4px 0 var(--paper); }
+.email-login input { min-width: 0; min-height: 52px; border: 0; outline: 0; padding: 0 14px; background: var(--paper); color: var(--ink); }
+.email-login button { border: 0; background: var(--lime); padding: 0 16px; color: var(--ink); font-size: 12px; font-weight: 950; }
+.auth-success { width: min(100%,460px); margin: 14px 0 0 !important; padding: 11px 13px; background: #e9ffc2; color: var(--ink) !important; font-size: 11px; }
+.auth-copy .form-error { width: min(100%,460px); margin: 14px 0 0; }
 .primary-cta:disabled { opacity: .55; cursor: wait; }
 .auth-copy small { margin-top: 18px; color: #8d8881; font-size: 10px; }
 .loading-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--cream); }
@@ -209,6 +216,7 @@ input, select, textarea { font: inherit; }
 .onboarding-note { align-self: end; max-width: 250px; padding: 17px; border: 1px solid var(--ink); background: var(--lime); }
 .onboarding-note b { font-size: 10px; letter-spacing: .05em; }
 .onboarding-note p { margin-bottom: 0; font-size: 11px; line-height: 1.45; }
+.signout-button { margin-top: 18px; border: 1px solid rgba(255,255,255,.45); background: transparent; color: #fff; padding: 9px 13px; font-size: 10px; font-weight: 850; }
 
 /* Sheets */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: flex-end; background: rgba(20,18,17,.62); backdrop-filter: blur(5px); }
@@ -412,6 +420,8 @@ input, select, textarea { font: inherit; }
   .verification-banner { align-items: flex-start; flex-direction: column; gap: 4px; }
   .verification-application { grid-template-columns: 1fr; }
   .verification-application .legal-check { grid-column: auto; }
+  .email-login > div { grid-template-columns: 1fr; }
+  .email-login button { min-height: 48px; }
   .legal-document section { grid-template-columns: 1fr; gap: 10px; }
   .legal-gate { grid-template-columns: 1fr; }.legal-gate > .brand { padding-bottom: 0; }.legal-gate > section { padding: 28px 22px 46px; }
   .legal-footer { align-items: center; flex-direction: column; }

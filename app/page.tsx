@@ -1,9 +1,9 @@
-import { getChatGPTUser } from './chatgpt-auth';
+import { getAppUser } from './auth';
 import RescataApp from './rescata-app';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const authUser = await getChatGPTUser();
+  const authUser = await getAppUser();
   return <RescataApp authUser={authUser} />;
 }

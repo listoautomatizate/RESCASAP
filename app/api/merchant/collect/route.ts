@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getAppUser } from '@/app/auth';
 import { ensureDatabase } from '@/db/bootstrap';
 
 export async function POST(request: Request) {
-  const authUser = await getChatGPTUser();
+  const authUser = await getAppUser();
   if (!authUser) return NextResponse.json({ error: 'Sesión requerida.' }, { status: 401 });
   const body = await request.json() as { code?: string };
   const code = body.code?.trim().toUpperCase();

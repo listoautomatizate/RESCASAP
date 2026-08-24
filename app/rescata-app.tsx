@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import type { ChatGPTUser } from './chatgpt-auth';
+import type { AppUser } from './auth';
 import LegalFooter from './legal-footer';
 
 type Profile = { id: string; email: string; name: string; role: 'consumer' | 'merchant'; neighborhood: string };
@@ -26,7 +26,7 @@ type Template = {
 type Business = { id: string; name: string; category: string; address: string; neighborhood: string };
 type MerchantApplication = { status: 'pending' | 'verified' | 'rejected'; legal_name: string; rut: string; habilitation_number: string };
 type BootstrapData = {
-  authUser: ChatGPTUser; profile: Profile | null; legalAccepted: boolean; packs: Pack[]; reservations: Reservation[];
+  authUser: AppUser; profile: Profile | null; legalAccepted: boolean; packs: Pack[]; reservations: Reservation[];
   merchantBusiness: Business | null; merchantApplication: MerchantApplication | null; merchantPacks: MerchantPack[]; templates: Template[];
 };
 type View = 'explore' | 'map' | 'history' | 'impact' | 'merchant';
@@ -42,8 +42,12 @@ const statusCopy: Record<string, string> = {
   reserved: 'Para retirar', collected: 'Retirado', no_show: 'No retirado',
 };
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
+async function api<T>(url: string, options?: RequestInit, canRefresh = true): Promise<T> {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) } });
+  if (response.status === 401 && canRefresh) {
+    const refreshed = await fetch('/api/auth/refresh', { method: 'POST' });
+    if (refreshed.ok) return api<T>(url, options, false);
+  }
   const result = await response.json() as { error?: string };
   if (!response.ok) throw new Error(result.error || 'Algo no salió bien. Probá de nuevo.');
   return result as T;
@@ -82,7 +86,7 @@ function CodeGrid({ code }: { code: string }) {
   );
 }
 
-export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null }) {
+export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
   const [data, setData] = useState<BootstrapData | null>(null);
   const [loading, setLoading] = useState(Boolean(authUser));
   const [error, setError] = useState('');
@@ -98,6 +102,8 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   const [locationLabel, setLocationLabel] = useState('Montevideo');
   const [toast, setToast] = useState('');
   const [templateSeed, setTemplateSeed] = useState<Partial<Template> | null>(null);
+  const [email, setEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
 
   const refresh = useCallback(async () => {
     if (!authUser) return;
@@ -149,6 +155,25 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   }, [data]);
 
   function showToast(message: string) { setToast(message); }
+
+  async function requestEmailLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setAuthMessage(''); setError('');
+    try {
+      const response = await fetch('/api/auth/email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || 'No pudimos enviar el enlace.');
+      setAuthMessage('Te enviamos un enlace seguro. Abrilo desde tu email para entrar.');
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos enviar el enlace.'); }
+    finally { setBusy(false); }
+  }
+
+  async function signOut() {
+    setBusy(true);
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    window.location.replace('/');
+  }
 
   function requestLocation() {
     if (!navigator.geolocation) return showToast('Tu navegador no permite ubicarte.');
@@ -282,8 +307,13 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
           <p className="eyebrow dark">PILOTO URUGUAY · RESCATE DE EXCEDENTES</p>
           <h1>Lo que sobra<br/>todavía <em>vale.</em></h1>
           <p>Comprá packs de comida a precio rescate antes del cierre. Menos desperdicio, más comida aprovechada.</p>
-          <a className="primary-cta" href="/signin-with-chatgpt?return_to=%2F">Ingresar para rescatar <span>→</span></a>
-          <small>Ingreso seguro. No necesitás crear otra contraseña.</small>
+          <form className="email-login" onSubmit={requestEmailLogin}>
+            <label htmlFor="login-email">Tu email</label>
+            <div><input id="login-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nombre@email.com" autoComplete="email" required/><button disabled={busy}>{busy ? 'Enviando…' : 'Recibir enlace'} <span>→</span></button></div>
+          </form>
+          {authMessage && <p className="auth-success">✓ {authMessage}</p>}
+          {error && <p className="form-error">{error}</p>}
+          <small>Ingreso seguro por email. No necesitás crear una contraseña.</small>
           <p className="pilot-auth-note">Estamos abriendo la primera versión pública. Los packs marcados como DEMO sirven para probar la experiencia y no generan un retiro real.</p>
         </section>
       </main><LegalFooter /></>
@@ -387,7 +417,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
       ) : view === 'history' ? (
         <HistoryView reservations={data.reservations} onOpen={(reservation) => { setActiveReservation(reservation); setSheet('success'); }} onCancel={cancelReservation} />
       ) : (
-        <ImpactView impact={impact} profile={data.profile} />
+        <ImpactView impact={impact} profile={data.profile} onSignOut={signOut} busy={busy} />
       )}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
@@ -453,8 +483,8 @@ function HistoryView({ reservations, onOpen, onCancel }: { reservations: Reserva
   return <section className="simple-page"><div className="page-title"><p className="eyebrow dark">TU HISTORIAL</p><h1>Mis rescates</h1><p>Todo lo que evitaste que se desperdiciara.</p></div>{reservations.length ? <div className="history-list">{reservations.map((item) => <article key={item.id}><div className={`history-mark ${item.status}`}>{item.status === 'collected' ? '✓' : item.status === 'reserved' ? '▦' : '×'}</div><div><span className={`status-chip ${item.status}`}>{statusCopy[item.status]}</span><h3>{item.title}</h3><p>{item.business_name} · {item.pickup_start}–{item.pickup_end}</p><small>{new Date(item.created_at).toLocaleDateString('es-UY')}</small></div><div className="history-actions"><b>{money(item.unit_price)}</b>{item.status === 'reserved' && <><button onClick={() => onOpen(item)}>Ver código</button><button className="danger-link" onClick={() => onCancel(item)}>Cancelar</button></>}</div></article>)}</div> : <div className="empty-state"><b>Todavía no hiciste tu primer rescate.</b><p>Cuando reserves un pack, va a aparecer acá.</p></div>}</section>;
 }
 
-function ImpactView({ impact, profile }: { impact: { kg: number; saved: number; count: number }; profile: Profile }) {
-  return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Vender mejor el excedente</b><p>Detectar qué horarios, precios y packs encuentran salida más rápido.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. Consultá nuestra <a href="/privacidad">política de privacidad</a>.</p></section>;
+function ImpactView({ impact, profile, onSignOut, busy }: { impact: { kg: number; saved: number; count: number }; profile: Profile; onSignOut: () => void; busy: boolean }) {
+  return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p><button className="signout-button" disabled={busy} onClick={onSignOut}>Cerrar sesión</button></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Vender mejor el excedente</b><p>Detectar qué horarios, precios y packs encuentran salida más rápido.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. Consultá nuestra <a href="/privacidad">política de privacidad</a>.</p></section>;
 }
 
 function MerchantDashboard({ data, busy, onCreate, onStatus, onCollect, onApply }: { data: BootstrapData; busy: boolean; onCreate: (seed?: Partial<Template> | null) => void; onStatus: (pack: MerchantPack, status: 'published' | 'cancelled' | 'unsold') => void; onCollect: (event: FormEvent<HTMLFormElement>) => void; onApply: (event: FormEvent<HTMLFormElement>) => void }) {

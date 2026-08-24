@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { NextResponse } from 'next/server';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getAppUser } from '@/app/auth';
 import { LEGAL_VERSION } from '@/app/legal';
 import { ensureDatabase } from '@/db/bootstrap';
 
@@ -21,7 +21,7 @@ function timeToMinutes(value: string) {
 }
 
 export async function GET() {
-  const authUser = await getChatGPTUser();
+  const authUser = await getAppUser();
   if (!authUser) return NextResponse.json({ error: 'Iniciá sesión para continuar.' }, { status: 401 });
 
   await ensureDatabase();

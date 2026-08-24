@@ -12,7 +12,7 @@ La propuesta de producto sigue tres capas:
 
 ### Consumidor
 
-- ingreso seguro y onboarding de una sola pantalla;
+- ingreso por enlace seguro enviado al email y onboarding de una sola pantalla;
 - geolocalización opcional y orden por cercanía;
 - búsqueda y filtros por rubro;
 - listado, mapa, detalle, stock y precio actualizados;
@@ -45,7 +45,7 @@ pnpm dev
 
 Abrir `http://localhost:3000`.
 
-El entorno local de Sites inyecta una identidad de prueba y una base D1 local. En el primer ingreso se elige consumidor o comercio. Para verificar una reserva de punta a punta, se puede:
+Para probar el acceso local se necesitan `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `PUBLIC_SITE_URL=http://localhost:3000` en un archivo local `.env`. Sites provee la base D1 local. En el primer ingreso se elige consumidor o comercio. Para verificar una reserva de punta a punta, se puede:
 
 1. entrar como consumidor y reservar un pack;
 2. copiar el código de retiro;
@@ -66,7 +66,7 @@ pnpm db:generate  # genera migraciones desde db/schema.ts
 
 - **Vinext + React + TypeScript:** interfaz y rutas de servidor compatibles con Cloudflare Workers.
 - **Cloudflare D1 / SQLite:** persistencia de perfiles, comercios, plantillas, packs y reservas.
-- **SIWC administrado por Sites:** identidad segura sin almacenar contraseñas en la aplicación.
+- **Supabase Auth:** acceso sin contraseña mediante enlace mágico enviado al email; la aplicación valida la identidad en el servidor.
 - **CSS propio:** diseño mobile-first sin depender de una biblioteca visual ni copiar una UX existente.
 - **API interna:** rutas pequeñas por dominio (`profile`, `packs`, `reservations`, `merchant`).
 
@@ -75,7 +75,8 @@ pnpm db:generate  # genera migraciones desde db/schema.ts
 ```text
 app/
   api/                  rutas de lectura y mutación
-  chatgpt-auth.ts       identidad administrada por la plataforma
+  auth.ts               validación de identidad de Supabase
+  auth/callback/        confirmación del enlace enviado por email
   terminos/             términos y condiciones públicos
   privacidad/           política de privacidad pública
   comercios/            acuerdo electrónico para comercios
