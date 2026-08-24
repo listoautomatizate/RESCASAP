@@ -13,8 +13,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'RESCATA. — Excedentes que todavía valen',
+  title: 'RESCASAP — Excedentes que todavía valen',
   description: 'Packs de comida a precio rescate, cerca tuyo y antes del cierre.',
+  metadataBase: new URL('https://rescasap.uy'),
+  openGraph: {
+    title: 'RESCASAP — Excedentes que todavía valen',
+    description: 'Packs de comida a precio rescate, cerca tuyo y antes del cierre.',
+    images: ['/og.png'],
+    locale: 'es_UY',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RESCASAP — Excedentes que todavía valen',
+    description: 'Packs de comida a precio rescate, cerca tuyo y antes del cierre.',
+    images: ['/og.png'],
+  },
 };
 
 export default function RootLayout({

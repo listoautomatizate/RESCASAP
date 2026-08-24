@@ -1,4 +1,4 @@
-# RESCATA. — MVP Uruguay
+# RESCASAP — MVP Uruguay
 
 MVP funcional, responsive y mobile-first para rescatar excedentes de comercios uruguayos antes del cierre. La identidad es provisional y original; no replica la marca ni la interfaz de Too Good To Go o Buen Provecho.
 
@@ -18,7 +18,7 @@ La propuesta de producto sigue tres capas:
 - listado, mapa, detalle, stock y precio actualizados;
 - precio habitual y precio rescate en UYU;
 - horario y dirección de retiro;
-- checkout de demostración con Mercado Pago o pago al retirar;
+- reserva con pago al retirar; Mercado Pago queda visible como integración futura;
 - reserva persistente y código de retiro único;
 - cancelación, historial y métricas personales de kg, porciones y ahorro.
 
@@ -97,7 +97,7 @@ Los índices priorizan las consultas frecuentes: packs por estado/horario, packs
 
 ## Decisiones del MVP
 
-- El “pago con Mercado Pago” es una simulación de checkout: la reserva y su estado sí son reales, pero no se procesa dinero.
+- El MVP público comienza únicamente con pago al retirar; Mercado Pago no procesa dinero todavía.
 - Se usa código visible de retiro, suficiente para el MVP y más fácil de operar que depender de la cámara; la estructura permite cambiarlo por QR firmado.
 - El contenido del pack es sorpresa, pero se comunica peso estimado y descripción para reducir incertidumbre.
 - La reducción automática se evalúa en horario de Uruguay cuando se consulta el inventario.
@@ -118,4 +118,4 @@ Los índices priorizan las consultas frecuentes: packs por estado/horario, packs
 
 ## Estado de preparación
 
-La aplicación está lista para demos y validación de flujo. Antes de operar con público y pagos reales necesita las integraciones y revisiones del apartado anterior.
+La aplicación está lista como piloto público y para validar el flujo. Los comercios de muestra están identificados como DEMO y no generan retiros reales. Antes de cobrar en línea necesita las integraciones y revisiones del apartado anterior.

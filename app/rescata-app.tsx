@@ -33,6 +33,8 @@ const categoryMarks: Record<string, string> = {
   Panadería: '🥐', Frutería: '🍅', Cafetería: '☕', Restaurante: '🍲', Hotel: '◇', Supermercado: '▦',
 };
 const toneMarks: Record<string, string> = { bread: '🥐', greens: '🍅', coffee: '☕', dinner: '🍲', merchant: '🥡' };
+const demoBusinessIds = new Set(['biz-la-miga', 'biz-verde', 'biz-cafe-sur', 'biz-botanico']);
+const demoPackIds = new Set(['pack-miga', 'pack-verde', 'pack-cafe-sur', 'pack-botanico']);
 const statusCopy: Record<string, string> = {
   published: 'Publicado', sold_out: 'Reservado', cancelled: 'Cancelado', unsold: 'No vendido',
   reserved: 'Para retirar', collected: 'Retirado', no_show: 'No retirado',
@@ -86,7 +88,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
   const [sheet, setSheet] = useState<'detail' | 'checkout' | 'success' | 'create' | null>(null);
   const [activeReservation, setActiveReservation] = useState<Reservation | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'paid' | 'pay_at_store'>('paid');
+  const [paymentMethod] = useState<'paid' | 'pay_at_store'>('pay_at_store');
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todos');
@@ -109,9 +111,12 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   }, [authUser]);
 
   useEffect(() => {
-    refresh();
+    const firstLoad = window.setTimeout(refresh, 0);
     const timer = window.setInterval(refresh, 20000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(firstLoad);
+      window.clearInterval(timer);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -238,24 +243,25 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   if (!authUser) {
     return (
       <main className="auth-page">
-        <div className="auth-art"><span>RESCATA.</span><b>🥐</b><i>🍅</i></div>
+        <div className="auth-art"><span>RESCASAP</span><b>🥐</b><i>🍅</i></div>
         <section className="auth-copy">
-          <p className="eyebrow dark">URUGUAY · RESCATE DE EXCEDENTES</p>
+          <p className="eyebrow dark">PILOTO URUGUAY · RESCATE DE EXCEDENTES</p>
           <h1>Lo que sobra<br/>todavía <em>vale.</em></h1>
           <p>Comprá packs de comida a precio rescate antes del cierre. Menos desperdicio, más comida aprovechada.</p>
           <a className="primary-cta" href="/signin-with-chatgpt?return_to=%2F">Ingresar para rescatar <span>→</span></a>
           <small>Ingreso seguro. No necesitás crear otra contraseña.</small>
+          <p className="pilot-auth-note">Estamos abriendo la primera versión pública. Los packs marcados como DEMO sirven para probar la experiencia y no generan un retiro real.</p>
         </section>
       </main>
     );
   }
 
-  if (loading) return <main className="loading-page"><span className="brand">RESCATA<span>.</span></span><div className="loader"/><p>Buscando excedentes cerca tuyo…</p></main>;
+  if (loading) return <main className="loading-page"><span className="brand">RESCASAP</span><div className="loader"/><p>Buscando excedentes cerca tuyo…</p></main>;
 
   if (!data?.profile) {
     return (
       <main className="onboarding-page">
-        <div className="onboarding-brand"><span className="brand">RESCATA<span>.</span></span><small>URUGUAY</small></div>
+        <div className="onboarding-brand"><span className="brand">RESCASAP</span><small>URUGUAY</small></div>
         <section className="onboarding-card">
           <p className="step-copy">PASO 1 DE 1</p>
           <h1>¿Cómo querés empezar?</h1>
@@ -273,7 +279,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
               <label className="field"><span>Dirección</span><input name="address" placeholder="Calle y número" /></label></div>
             </details>
             {error && <p className="form-error">{error}</p>}
-            <button className="primary-cta" disabled={busy}>{busy ? 'Guardando…' : 'Entrar a RESCATA'} <span>→</span></button>
+            <button className="primary-cta" disabled={busy}>{busy ? 'Guardando…' : 'Entrar a RESCASAP'} <span>→</span></button>
           </form>
         </section>
         <aside className="onboarding-note"><b>VENDER → REDISTRIBUIR → APRENDER</b><p>Este MVP empieza recuperando valor. La siguiente capa conecta donaciones y ayuda a producir con menos merma.</p></aside>
@@ -287,7 +293,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
   return (
     <main className="app-shell">
       <header className="topbar">
-        <button className="brand button-brand" onClick={() => setView(isMerchant ? 'merchant' : 'explore')}>RESCATA<span>.</span></button>
+        <button className="brand button-brand" onClick={() => setView(isMerchant ? 'merchant' : 'explore')}>RESCASAP</button>
         <div className="mode-switch">
           <button className={!isMerchant ? 'active' : ''} onClick={() => switchRole('consumer')} disabled={busy}>Rescatar</button>
           <button className={isMerchant ? 'active' : ''} onClick={() => switchRole('merchant')} disabled={busy}>Mi comercio</button>
@@ -297,6 +303,8 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
           <button className="profile-button" aria-label="Abrir perfil" onClick={() => setView('impact')}>{data.profile.name.slice(0, 2).toUpperCase()}</button>
         </div>
       </header>
+
+      <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios identificados como DEMO son ejemplos y no ofrecen retiros reales. El pago disponible en esta etapa es al retirar.</span></aside>
 
       {isMerchant ? (
         <MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} />
@@ -322,7 +330,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
             {visiblePacks.length ? <div className="pack-grid">{visiblePacks.map((pack) => (
               <article className="pack-card interactive" key={pack.id} onClick={() => { setSelectedPack(pack); setSheet('detail'); }}>
                 <div className="pack-visual-wrap"><PackArt pack={pack}/><button className="heart" onClick={(event) => { event.stopPropagation(); showToast('Guardado en tus favoritos.'); }} aria-label={`Guardar ${pack.title}`}>♡</button></div>
-                <div className="pack-body"><p className="shop-name">{pack.business_name} · {pack.neighborhood}</p><h3>{pack.title}</h3>
+                <div className="pack-body"><p className="shop-name">{pack.business_name} · {pack.neighborhood}{demoBusinessIds.has(pack.business_id) ? ' · DEMO' : ''}</p><h3>{pack.title}</h3>
                   <div className="pack-meta"><span>◷ {pack.pickup_start}–{pack.pickup_end}</span><span>⌖ {location ? `${distanceKm(location, pack).toFixed(1)} km` : pack.neighborhood}</span></div>
                   <div className="price-row"><div><strong>{money(pack.current_price)}</strong><s>{money(pack.normal_price)}</s></div><button aria-label={`Ver ${pack.title}`}>→</button></div>
                 </div>
@@ -335,7 +343,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
       ) : view === 'history' ? (
         <HistoryView reservations={data.reservations} onOpen={(reservation) => { setActiveReservation(reservation); setSheet('success'); }} onCancel={cancelReservation} />
       ) : (
-        <ImpactView impact={impact} profile={data.profile} reservations={data.reservations} />
+        <ImpactView impact={impact} profile={data.profile} />
       )}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
@@ -356,7 +364,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
 
       {sheet && <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) { setSheet(null); setError(''); } }}>
         {sheet === 'detail' && selectedPack && <PackDetail pack={selectedPack} location={location} onClose={() => setSheet(null)} onCheckout={() => setSheet('checkout')} />}
-        {sheet === 'checkout' && selectedPack && <Checkout pack={selectedPack} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} busy={busy} error={error} onBack={() => setSheet('detail')} onReserve={reserve} />}
+        {sheet === 'checkout' && selectedPack && <Checkout pack={selectedPack} paymentMethod={paymentMethod} busy={busy} error={error} onBack={() => setSheet('detail')} onReserve={reserve} />}
         {sheet === 'success' && activeReservation && <ReservationTicket reservation={activeReservation} onClose={() => { setSheet(null); setActiveReservation(null); }} />}
         {sheet === 'create' && <CreatePack business={data.merchantBusiness} templates={data.templates} seed={templateSeed} busy={busy} error={error} onClose={() => { setSheet(null); setTemplateSeed(null); setError(''); }} onSubmit={createPack} />}
       </div>}
@@ -370,33 +378,36 @@ function PackDetail({ pack, location, onClose, onCheckout }: { pack: Pack; locat
   return <section className="sheet detail-sheet"><button className="sheet-close" onClick={onClose}>×</button><PackArt pack={pack} large/>
     <div className="sheet-content"><p className="shop-name">{pack.category} · ★ {pack.rating}</p><h2>{pack.title}</h2><button className="merchant-link">{pack.business_name} · {pack.neighborhood} <span>→</span></button>
       <p className="detail-description">{pack.description}</p>
+      {demoBusinessIds.has(pack.business_id) && <div className="demo-warning"><b>PACK DE DEMOSTRACIÓN</b><span>Podés probar la reserva, pero no concurras a esta dirección: este comercio todavía no está vinculado a RESCASAP.</span></div>}
       <div className="detail-facts"><div><span>◷</span><p><small>RETIRÁ HOY</small><b>{pack.pickup_start}–{pack.pickup_end}</b></p></div><div><span>⌖</span><p><small>DIRECCIÓN</small><b>{pack.address}</b><em>{location ? `${distanceKm(location, pack).toFixed(1)} km` : pack.neighborhood}</em></p></div><div><span>≈</span><p><small>CONTENIDO ESTIMADO</small><b>{pack.estimated_kg.toLocaleString('es-UY')} kg</b><em>El contenido exacto puede variar.</em></p></div></div>
       {pack.auto_discount ? <div className="dynamic-note"><span>↘</span><p><b>Precio inteligente activo</b>Si quedan packs {pack.discount_minutes} min antes del cierre, puede bajar hasta {money(pack.final_price ?? pack.current_price)}.</p></div> : null}
       <div className="sticky-checkout"><div><small>PRECIO RESCATE</small><b>{money(pack.current_price)}</b><s>{money(pack.normal_price)}</s></div><button onClick={onCheckout}>Reservar 1 pack <span>→</span></button></div>
     </div></section>;
 }
 
-function Checkout({ pack, paymentMethod, setPaymentMethod, busy, error, onBack, onReserve }: { pack: Pack; paymentMethod: 'paid' | 'pay_at_store'; setPaymentMethod: (value: 'paid' | 'pay_at_store') => void; busy: boolean; error: string; onBack: () => void; onReserve: () => void }) {
+function Checkout({ pack, paymentMethod, busy, error, onBack, onReserve }: { pack: Pack; paymentMethod: 'paid' | 'pay_at_store'; busy: boolean; error: string; onBack: () => void; onReserve: () => void }) {
   return <section className="sheet checkout-sheet"><header><button className="back-button" onClick={onBack}>←</button><div><p className="eyebrow dark">ÚLTIMO PASO</p><h2>Confirmá tu rescate</h2></div></header><div className="checkout-pack"><span>{toneMarks[pack.visual_tone] ?? '🥡'}</span><div><b>{pack.title}</b><small>{pack.business_name} · Retiro {pack.pickup_start}–{pack.pickup_end}</small></div><strong>{money(pack.current_price)}</strong></div>
-    <fieldset className="payment-options"><legend>¿Cómo querés pagar?</legend><label className={paymentMethod === 'paid' ? 'selected' : ''}><input type="radio" checked={paymentMethod === 'paid'} onChange={() => setPaymentMethod('paid')}/><span><b>Mercado Pago</b><small>Pago demo inmediato para este MVP.</small></span><em>MP</em></label><label className={paymentMethod === 'pay_at_store' ? 'selected' : ''}><input type="radio" checked={paymentMethod === 'pay_at_store'} onChange={() => setPaymentMethod('pay_at_store')}/><span><b>Pago al retirar</b><small>El comercio confirma el cobro.</small></span><em>$</em></label></fieldset>
+    <fieldset className="payment-options"><legend>Forma de pago</legend><label className="selected"><input type="radio" checked={paymentMethod === 'pay_at_store'} readOnly/><span><b>Pago al retirar</b><small>Pagás directamente en el comercio cuando recibís el pack.</small></span><em>$</em></label><label className="coming-soon"><input type="radio" disabled/><span><b>Mercado Pago</b><small>Próximamente, cuando cada comercio vincule su cuenta.</small></span><em>MP</em></label></fieldset>
+    {demoBusinessIds.has(pack.business_id) && <div className="demo-warning"><b>PRUEBA SIN RETIRO</b><span>Esta reserva es demostrativa y no genera una compra ni un retiro real.</span></div>}
     <div className="checkout-summary"><p><span>1 pack</span><b>{money(pack.current_price)}</b></p><p><span>Cargo de servicio</span><b>$ 0</b></p><p className="total"><span>Total</span><b>{money(pack.current_price)}</b></p></div>
-    <label className="terms"><input type="checkbox" defaultChecked/> Entiendo que el contenido es sorpresa y debo retirar dentro del horario.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? 'Reservando…' : paymentMethod === 'paid' ? `Pagar ${money(pack.current_price)}` : 'Confirmar reserva'} <span>→</span></button>
+    <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa y debo retirar dentro del horario.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? 'Reservando…' : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : 'Confirmar reserva'} <span>→</span></button>
   </section>;
 }
 
 function ReservationTicket({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
-  return <section className="sheet ticket-sheet"><button className="sheet-close" onClick={onClose}>×</button><div className="success-mark">✓</div><p className="eyebrow dark">RESCATE CONFIRMADO</p><h2>¡Ese pack es tuyo!</h2><p>Mostrá este código cuando llegues. El comercio lo valida y listo.</p><CodeGrid code={reservation.pickup_code}/><strong className="pickup-code">{reservation.pickup_code}</strong><div className="ticket-info"><p><span>Comercio</span><b>{reservation.business_name}</b></p><p><span>Retiro</span><b>Hoy · {reservation.pickup_start}–{reservation.pickup_end}</b></p><p><span>Dirección</span><b>{reservation.address}, {reservation.neighborhood}</b></p><p><span>Pago</span><b>{reservation.payment_status === 'paid' ? `${money(reservation.unit_price)} · Pagado` : `${money(reservation.unit_price)} · Al retirar`}</b></p></div><button className="primary-cta" onClick={onClose}>Listo <span>✓</span></button></section>;
+  const isDemo = demoPackIds.has(reservation.pack_id);
+  return <section className="sheet ticket-sheet"><button className="sheet-close" onClick={onClose}>×</button><div className="success-mark">✓</div><p className="eyebrow dark">{isDemo ? 'PRUEBA COMPLETADA' : 'RESCATE CONFIRMADO'}</p><h2>{isDemo ? 'Así funciona una reserva' : '¡Ese pack es tuyo!'}</h2><p>{isDemo ? 'Este código demuestra el flujo. No concurras al comercio ni realices ningún pago.' : 'Mostrá este código cuando llegues. El comercio lo valida y listo.'}</p><CodeGrid code={reservation.pickup_code}/><strong className="pickup-code">{reservation.pickup_code}</strong><div className="ticket-info"><p><span>Comercio</span><b>{reservation.business_name}{isDemo ? ' · DEMO' : ''}</b></p><p><span>Retiro</span><b>{isDemo ? 'Sin retiro real' : `Hoy · ${reservation.pickup_start}–${reservation.pickup_end}`}</b></p><p><span>Dirección</span><b>{isDemo ? 'Ubicación de ejemplo' : `${reservation.address}, ${reservation.neighborhood}`}</b></p><p><span>Pago</span><b>{isDemo ? 'No corresponde' : reservation.payment_status === 'paid' ? `${money(reservation.unit_price)} · Pagado` : `${money(reservation.unit_price)} · Al retirar`}</b></p></div><button className="primary-cta" onClick={onClose}>Listo <span>✓</span></button></section>;
 }
 
 function MapView({ packs, onSelect, onLocate, locationLabel }: { packs: Pack[]; onSelect: (pack: Pack) => void; onLocate: () => void; locationLabel: string }) {
-  return <section className="map-page"><div className="map-toolbar"><div><p className="eyebrow dark">MONTEVIDEO</p><h1>Packs cerca</h1></div><button onClick={onLocate}>⌖ {locationLabel}</button></div><div className="map-canvas"><div className="map-grid"/><span className="road r1"/><span className="road r2"/><span className="water">RÍO DE LA PLATA</span>{packs.map((pack, index) => <button className={`map-pin p${index % 4}`} onClick={() => onSelect(pack)} key={pack.id}><span>{money(pack.current_price)}</span><i>{toneMarks[pack.visual_tone] ?? '🥡'}</i></button>)}<div className="you-pin">●<span>Vos</span></div></div><div className="map-list">{packs.map((pack) => <button key={pack.id} onClick={() => onSelect(pack)}><span>{toneMarks[pack.visual_tone] ?? '🥡'}</span><div><b>{pack.title}</b><small>{pack.business_name} · hasta {pack.pickup_end}</small></div><strong>{money(pack.current_price)}</strong></button>)}</div></section>;
+  return <section className="map-page"><div className="map-toolbar"><div><p className="eyebrow dark">MONTEVIDEO</p><h1>Packs cerca</h1></div><button onClick={onLocate}>⌖ {locationLabel}</button></div><div className="map-canvas"><div className="map-grid"/><span className="road r1"/><span className="road r2"/><span className="water">RÍO DE LA PLATA</span>{packs.map((pack, index) => <button className={`map-pin p${index % 4}`} onClick={() => onSelect(pack)} key={pack.id}><span>{money(pack.current_price)}</span><i>{toneMarks[pack.visual_tone] ?? '🥡'}</i></button>)}<div className="you-pin">●<span>Vos</span></div></div><div className="map-list">{packs.map((pack) => <button key={pack.id} onClick={() => onSelect(pack)}><span>{toneMarks[pack.visual_tone] ?? '🥡'}</span><div><b>{pack.title}</b><small>{pack.business_name}{demoBusinessIds.has(pack.business_id) ? ' · DEMO' : ''} · hasta {pack.pickup_end}</small></div><strong>{money(pack.current_price)}</strong></button>)}</div></section>;
 }
 
 function HistoryView({ reservations, onOpen, onCancel }: { reservations: Reservation[]; onOpen: (item: Reservation) => void; onCancel: (item: Reservation) => void }) {
   return <section className="simple-page"><div className="page-title"><p className="eyebrow dark">TU HISTORIAL</p><h1>Mis rescates</h1><p>Todo lo que evitaste que se desperdiciara.</p></div>{reservations.length ? <div className="history-list">{reservations.map((item) => <article key={item.id}><div className={`history-mark ${item.status}`}>{item.status === 'collected' ? '✓' : item.status === 'reserved' ? '▦' : '×'}</div><div><span className={`status-chip ${item.status}`}>{statusCopy[item.status]}</span><h3>{item.title}</h3><p>{item.business_name} · {item.pickup_start}–{item.pickup_end}</p><small>{new Date(item.created_at).toLocaleDateString('es-UY')}</small></div><div className="history-actions"><b>{money(item.unit_price)}</b>{item.status === 'reserved' && <><button onClick={() => onOpen(item)}>Ver código</button><button className="danger-link" onClick={() => onCancel(item)}>Cancelar</button></>}</div></article>)}</div> : <div className="empty-state"><b>Todavía no hiciste tu primer rescate.</b><p>Cuando reserves un pack, va a aparecer acá.</p></div>}</section>;
 }
 
-function ImpactView({ impact, profile, reservations }: { impact: { kg: number; saved: number; count: number }; profile: Profile; reservations: Reservation[] }) {
+function ImpactView({ impact, profile }: { impact: { kg: number; saved: number; count: number }; profile: Profile }) {
   return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Donar lo no vendido</b><p>Conectar packs aptos con organizaciones habilitadas al finalizar el día.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. No vendemos tus datos.</p></section>;
 }
 
