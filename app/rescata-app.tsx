@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChatGPTUser } from './chatgpt-auth';
+import LegalFooter from './legal-footer';
 
 type Profile = { id: string; email: string; name: string; role: 'consumer' | 'merchant'; neighborhood: string };
 type Pack = {
@@ -23,9 +24,10 @@ type Template = {
   pickup_start: string; pickup_end: string; auto_discount: number; final_price: number | null; discount_minutes: number | null;
 };
 type Business = { id: string; name: string; category: string; address: string; neighborhood: string };
+type MerchantApplication = { status: 'pending' | 'verified' | 'rejected'; legal_name: string; rut: string; habilitation_number: string };
 type BootstrapData = {
-  authUser: ChatGPTUser; profile: Profile | null; packs: Pack[]; reservations: Reservation[];
-  merchantBusiness: Business | null; merchantPacks: MerchantPack[]; templates: Template[];
+  authUser: ChatGPTUser; profile: Profile | null; legalAccepted: boolean; packs: Pack[]; reservations: Reservation[];
+  merchantBusiness: Business | null; merchantApplication: MerchantApplication | null; merchantPacks: MerchantPack[]; templates: Template[];
 };
 type View = 'explore' | 'map' | 'history' | 'impact' | 'merchant';
 
@@ -42,7 +44,7 @@ const statusCopy: Record<string, string> = {
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) } });
-  const result = await response.json();
+  const result = await response.json() as { error?: string };
   if (!response.ok) throw new Error(result.error || 'Algo no salió bien. Probá de nuevo.');
   return result as T;
 }
@@ -183,6 +185,29 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
     finally { setBusy(false); }
   }
 
+  async function applyAsMerchant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data?.profile || !data.merchantBusiness) return;
+    setBusy(true); setError('');
+    const form = new FormData(event.currentTarget);
+    try {
+      await api('/api/profile', { method: 'POST', body: JSON.stringify({
+        name: data.profile.name,
+        role: 'merchant',
+        neighborhood: data.profile.neighborhood,
+        businessName: data.merchantBusiness.name,
+        legalName: form.get('legalName'),
+        businessRut: form.get('businessRut'),
+        habilitationNumber: form.get('habilitationNumber'),
+        acceptedTerms: 'on',
+        acceptedMerchantAgreement: form.get('acceptedMerchantAgreement'),
+      }) });
+      await refresh();
+      showToast('Solicitud enviada. Revisaremos los datos antes de habilitar publicaciones.');
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos enviar la solicitud.'); }
+    finally { setBusy(false); }
+  }
+
   async function reserve() {
     if (!selectedPack) return;
     setBusy(true); setError('');
@@ -240,9 +265,18 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
     finally { setBusy(false); }
   }
 
+  async function acceptLegal() {
+    setBusy(true); setError('');
+    try {
+      await api('/api/legal/accept', { method: 'POST', body: JSON.stringify({ accepted: true }) });
+      await refresh();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos guardar tu aceptación.'); }
+    finally { setBusy(false); }
+  }
+
   if (!authUser) {
     return (
-      <main className="auth-page">
+      <><main className="auth-page">
         <div className="auth-art"><span>RESCASAP</span><b>🥐</b><i>🍅</i></div>
         <section className="auth-copy">
           <p className="eyebrow dark">PILOTO URUGUAY · RESCATE DE EXCEDENTES</p>
@@ -252,7 +286,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
           <small>Ingreso seguro. No necesitás crear otra contraseña.</small>
           <p className="pilot-auth-note">Estamos abriendo la primera versión pública. Los packs marcados como DEMO sirven para probar la experiencia y no generan un retiro real.</p>
         </section>
-      </main>
+      </main><LegalFooter /></>
     );
   }
 
@@ -260,7 +294,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
 
   if (!data?.profile) {
     return (
-      <main className="onboarding-page">
+      <><main className="onboarding-page">
         <div className="onboarding-brand"><span className="brand">RESCASAP</span><small>URUGUAY</small></div>
         <section className="onboarding-card">
           <p className="step-copy">PASO 1 DE 1</p>
@@ -277,17 +311,27 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
               <label className="field"><span>Nombre del comercio</span><input name="businessName" placeholder="Ej. Panadería La Esquina" /></label>
               <div className="form-row"><label className="field"><span>Rubro</span><select name="category"><option>Panadería</option><option>Restaurante</option><option>Cafetería</option><option>Frutería</option><option>Hotel</option><option>Supermercado</option></select></label>
               <label className="field"><span>Dirección</span><input name="address" placeholder="Calle y número" /></label></div>
+              <label className="field"><span>Razón social o titular</span><input name="legalName" placeholder="Nombre que figura ante DGI" /></label>
+              <div className="form-row"><label className="field"><span>RUT (12 dígitos)</span><input name="businessRut" inputMode="numeric" pattern="[0-9 .-]{12,}" placeholder="000000000000" /></label>
+              <label className="field"><span>N.º de habilitación bromatológica</span><input name="habilitationNumber" placeholder="Número o expediente" /></label></div>
+              <label className="legal-check"><input name="acceptedMerchantAgreement" type="checkbox"/><span>Declaro que el comercio cuenta con las habilitaciones aplicables y acepto el <a href="/comercios" target="_blank">Acuerdo para Comercios</a>. La cuenta quedará pendiente de verificación.</span></label>
             </details>
+            <label className="legal-check"><input name="acceptedTerms" type="checkbox" required/><span>Acepto los <a href="/terminos" target="_blank">Términos y condiciones</a> y la <a href="/privacidad" target="_blank">Política de privacidad</a>.</span></label>
             {error && <p className="form-error">{error}</p>}
             <button className="primary-cta" disabled={busy}>{busy ? 'Guardando…' : 'Entrar a RESCASAP'} <span>→</span></button>
           </form>
         </section>
-        <aside className="onboarding-note"><b>VENDER → REDISTRIBUIR → APRENDER</b><p>Este MVP empieza recuperando valor. La siguiente capa conecta donaciones y ayuda a producir con menos merma.</p></aside>
-      </main>
+        <aside className="onboarding-note"><b>VENDER → APROVECHAR → APRENDER</b><p>RESCASAP ayuda a vender el excedente del día y usar el historial para producir con menos merma.</p></aside>
+      </main><LegalFooter /></>
     );
   }
 
+  if (!data.legalAccepted) {
+    return <><main className="legal-gate"><span className="brand">RESCASAP</span><section><p className="eyebrow dark">ACTUALIZACIÓN LEGAL</p><h1>Antes de continuar</h1><p>Publicamos los documentos que explican cómo funciona RESCASAP y cómo protegemos tus datos.</p><div><a href="/terminos" target="_blank">Leer términos</a><a href="/privacidad" target="_blank">Leer privacidad</a>{data.profile.role === 'merchant' && <a href="/comercios" target="_blank">Leer acuerdo para comercios</a>}</div>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={acceptLegal}>{busy ? 'Guardando…' : 'Aceptar y continuar'} <span>→</span></button></section></main><LegalFooter /></>;
+  }
+
   const isMerchant = data.profile.role === 'merchant';
+  const canPublish = data.merchantApplication?.status === 'verified';
   const categories = ['Todos', ...Array.from(new Set(data.packs.map((pack) => pack.category)))];
 
   return (
@@ -307,7 +351,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
       <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios identificados como DEMO son ejemplos y no ofrecen retiros reales. El pago disponible en esta etapa es al retirar.</span></aside>
 
       {isMerchant ? (
-        <MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} />
+        <MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed ?? null); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} onApply={applyAsMerchant} />
       ) : view === 'explore' ? (
         <>
           <section className="hero" id="inicio">
@@ -336,7 +380,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
                 </div>
               </article>))}</div> : <div className="empty-state"><b>No encontramos packs con esos filtros.</b><p>Probá otro rubro o buscá en toda la zona.</p><button onClick={() => { setQuery(''); setCategory('Todos'); }}>Limpiar filtros</button></div>}
           </section>
-          <section className="system-banner"><div><span>01</span><b>Vender</b><p>Recuperar valor hoy.</p></div><i>→</i><div><span>02</span><b>Redistribuir</b><p>Donar lo no vendido.</p></div><i>→</i><div><span>03</span><b>Aprender</b><p>Producir con menos merma.</p></div></section>
+          <section className="system-banner"><div><span>01</span><b>Vender</b><p>Recuperar valor hoy.</p></div><i>→</i><div><span>02</span><b>Aprovechar</b><p>Dar salida al excedente.</p></div><i>→</i><div><span>03</span><b>Aprender</b><p>Producir con menos merma.</p></div></section>
         </>
       ) : view === 'map' ? (
         <MapView packs={visiblePacks} onSelect={(pack) => { setSelectedPack(pack); setSheet('detail'); }} onLocate={requestLocation} locationLabel={locationLabel} />
@@ -349,7 +393,7 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
       <nav className="bottom-nav" aria-label="Navegación principal">
         {isMerchant ? <>
           <button className="nav-link active" onClick={() => setView('merchant')}><span>▦</span>Panel</button>
-          <button className="nav-link" onClick={() => setSheet('create')}><span>＋</span>Publicar</button>
+          <button className="nav-link" onClick={() => canPublish ? setSheet('create') : showToast('Tu comercio debe estar verificado para publicar.')}><span>＋</span>Publicar</button>
           <button className="rescue-action" onClick={() => document.getElementById('collect-code')?.focus()} aria-label="Validar retiro"><span>⌁</span></button>
           <button className="nav-link" onClick={() => showToast('Historial visible en el panel.')}><span>◷</span>Historial</button>
           <button className="nav-link" onClick={() => switchRole('consumer')}><span>○</span>Explorar</button>
@@ -361,6 +405,8 @@ export default function RescataApp({ authUser }: { authUser: ChatGPTUser | null 
           <button className={`nav-link ${view === 'impact' ? 'active' : ''}`} onClick={() => setView('impact')}><span>○</span>Impacto</button>
         </>}
       </nav>
+
+      <LegalFooter />
 
       {sheet && <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) { setSheet(null); setError(''); } }}>
         {sheet === 'detail' && selectedPack && <PackDetail pack={selectedPack} location={location} onClose={() => setSheet(null)} onCheckout={() => setSheet('checkout')} />}
@@ -390,7 +436,7 @@ function Checkout({ pack, paymentMethod, busy, error, onBack, onReserve }: { pac
     <fieldset className="payment-options"><legend>Forma de pago</legend><label className="selected"><input type="radio" checked={paymentMethod === 'pay_at_store'} readOnly/><span><b>Pago al retirar</b><small>Pagás directamente en el comercio cuando recibís el pack.</small></span><em>$</em></label><label className="coming-soon"><input type="radio" disabled/><span><b>Mercado Pago</b><small>Próximamente, cuando cada comercio vincule su cuenta.</small></span><em>MP</em></label></fieldset>
     {demoBusinessIds.has(pack.business_id) && <div className="demo-warning"><b>PRUEBA SIN RETIRO</b><span>Esta reserva es demostrativa y no genera una compra ni un retiro real.</span></div>}
     <div className="checkout-summary"><p><span>1 pack</span><b>{money(pack.current_price)}</b></p><p><span>Cargo de servicio</span><b>$ 0</b></p><p className="total"><span>Total</span><b>{money(pack.current_price)}</b></p></div>
-    <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa y debo retirar dentro del horario.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? 'Reservando…' : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : 'Confirmar reserva'} <span>→</span></button>
+    <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa, debo retirar dentro del horario y se aplican los <a href="/terminos" target="_blank">términos</a>.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? 'Reservando…' : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : 'Confirmar reserva'} <span>→</span></button>
   </section>;
 }
 
@@ -408,16 +454,18 @@ function HistoryView({ reservations, onOpen, onCancel }: { reservations: Reserva
 }
 
 function ImpactView({ impact, profile }: { impact: { kg: number; saved: number; count: number }; profile: Profile }) {
-  return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Donar lo no vendido</b><p>Conectar packs aptos con organizaciones habilitadas al finalizar el día.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. No vendemos tus datos.</p></section>;
+  return <section className="impact-page"><div className="impact-hero"><p className="eyebrow">TU IMPACTO</p><h1>Lo pequeño<br/><em>se acumula.</em></h1><p>{profile.name}, cada pack mueve el sistema en la dirección correcta.</p></div><div className="impact-cards"><article><span>≈</span><strong>{impact.kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><p>de comida rescatada</p></article><article><span>$</span><strong>{money(impact.saved)}</strong><p>que no gastaste de más</p></article><article><span>↻</span><strong>{impact.count}</strong><p>rescates realizados</p></article></div><div className="impact-equivalent"><div className="plate-graphic"><i/><i/><i/></div><p><span>ESO EQUIVALE A</span><b>{Math.max(0, Math.round(impact.kg * 2.5))} porciones</b>que encontraron mesa en vez de basura.</p></div><section className="future-layers"><p className="eyebrow dark">LO QUE SIGUE</p><h2>Una plataforma que aprende.</h2><div><article><span>PRÓXIMO</span><b>Vender mejor el excedente</b><p>Detectar qué horarios, precios y packs encuentran salida más rápido.</p><button disabled>En preparación</button></article><article><span>DESPUÉS</span><b>Predecir la merma</b><p>Usar el historial para sugerir cuánto producir y cuándo publicar.</p><button disabled>Arquitectura lista</button></article></div></section><p className="privacy-note">Tus métricas se calculan con tus rescates. Consultá nuestra <a href="/privacidad">política de privacidad</a>.</p></section>;
 }
 
-function MerchantDashboard({ data, busy, onCreate, onStatus, onCollect }: { data: BootstrapData; busy: boolean; onCreate: (seed?: Partial<Template> | null) => void; onStatus: (pack: MerchantPack, status: 'published' | 'cancelled' | 'unsold') => void; onCollect: (event: FormEvent<HTMLFormElement>) => void }) {
+function MerchantDashboard({ data, busy, onCreate, onStatus, onCollect, onApply }: { data: BootstrapData; busy: boolean; onCreate: (seed?: Partial<Template> | null) => void; onStatus: (pack: MerchantPack, status: 'published' | 'cancelled' | 'unsold') => void; onCollect: (event: FormEvent<HTMLFormElement>) => void; onApply: (event: FormEvent<HTMLFormElement>) => void }) {
   const packs = data.merchantPacks;
   const active = packs.filter((pack) => pack.status === 'published').length;
   const reserved = packs.reduce((sum, pack) => sum + Number(pack.reservation_count ?? 0), 0);
   const kg = packs.reduce((sum, pack) => sum + (Number(pack.quantity_total) - Number(pack.quantity_available)) * Number(pack.estimated_kg), 0);
   const revenue = packs.reduce((sum, pack) => sum + Number(pack.revenue ?? 0), 0);
-  return <section className="merchant-page"><header className="merchant-hero"><div><p className="eyebrow">PANEL DE COMERCIO</p><h1>{data.merchantBusiness?.name ?? 'Mi comercio'}</h1><p>{data.merchantBusiness?.category} · {data.merchantBusiness?.neighborhood}</p></div><button className="lime-button" onClick={() => onCreate(null)}>＋ Publicar excedente</button></header><div className="merchant-metrics"><article><span>PUBLICADOS HOY</span><strong>{active}</strong><small>packs activos</small></article><article><span>RESERVAS</span><strong>{reserved}</strong><small>confirmadas</small></article><article><span>COMIDA RESCATADA</span><strong>{kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><small>estimados</small></article><article><span>VALOR RECUPERADO</span><strong>{money(revenue)}</strong><small>en ventas rescate</small></article></div><div className="merchant-layout"><div><section className="merchant-section"><div className="merchant-section-title"><div><p className="eyebrow dark">INVENTARIO DE HOY</p><h2>Packs publicados</h2></div><button onClick={() => onCreate(null)}>Nuevo pack ＋</button></div>{packs.length ? <div className="merchant-pack-list">{packs.map((pack) => <article key={pack.id}><div className={`mini-art ${pack.visual_tone}`}>{toneMarks[pack.visual_tone] ?? '🥡'}</div><div className="merchant-pack-main"><span className={`status-chip ${pack.status}`}>{statusCopy[pack.status]}</span><h3>{pack.title}</h3><p>Retiro {pack.pickup_start}–{pack.pickup_end} · {pack.quantity_available}/{pack.quantity_total} disponibles</p><div className="stock-bar"><i style={{ width: `${Math.max(0, pack.quantity_available / pack.quantity_total) * 100}%` }}/></div></div><div className="merchant-pack-value"><b>{money(pack.current_price)}</b><small>{pack.reservation_count} reservas</small></div><div className="more-menu">{pack.status === 'published' ? <><button disabled={busy} onClick={() => onStatus(pack, 'unsold')}>Marcar no vendido</button><button disabled={busy} onClick={() => onStatus(pack, 'cancelled')}>Cancelar</button></> : <button disabled={busy} onClick={() => onStatus(pack, 'published')}>Republicar</button>}</div></article>)}</div> : <div className="empty-state"><b>No hay packs publicados.</b><p>Creá el primero en menos de un minuto.</p></div>}</section><section className="merchant-section templates-section"><div className="merchant-section-title"><div><p className="eyebrow dark">ATAJOS</p><h2>Plantillas recurrentes</h2></div></div>{data.templates.length ? <div className="template-grid">{data.templates.map((template) => <button key={template.id} onClick={() => onCreate(template)}><span>↻</span><b>{template.title}</b><small>{money(template.rescue_price)} · {template.pickup_start}–{template.pickup_end}</small><em>Usar plantilla →</em></button>)}</div> : <div className="template-empty"><span>↻</span><p><b>Publicá más rápido mañana.</b>Marcá “Guardar como plantilla” al crear un pack.</p></div>}</section></div><aside className="merchant-side"><section className="collect-card"><p className="eyebrow">VALIDAR RETIRO</p><h2>Ingresá el código</h2><p>Pedile al cliente el código de 6 caracteres.</p><form onSubmit={onCollect}><input id="collect-code" name="code" placeholder="ABC-123" pattern="[A-Za-z]{3}-[0-9]{3}" maxLength={7} required/><button disabled={busy}>Confirmar retiro →</button></form></section><section className="future-card"><span>PRÓXIMA CAPA</span><h3>Donación automática</h3><p>Al cerrar, lo no vendido podrá ofrecerse a organizaciones habilitadas.</p><div><i/>Módulo preparado</div></section><section className="tip-card"><b>Idea para hoy</b><p>Los packs publicados al menos 90 min antes del cierre tienen más tiempo para encontrar rescatista.</p></section></aside></div></section>;
+  const approved = data.merchantApplication?.status === 'verified';
+  const reviewLabel = data.merchantApplication?.status === 'rejected' ? 'Solicitud observada' : data.merchantApplication ? 'Verificación pendiente' : 'Falta completar la solicitud';
+  return <section className="merchant-page"><header className="merchant-hero"><div><p className="eyebrow">PANEL DE COMERCIO</p><h1>{data.merchantBusiness?.name ?? 'Mi comercio'}</h1><p>{data.merchantBusiness?.category} · {data.merchantBusiness?.neighborhood}</p></div><button className="lime-button" disabled={!approved} onClick={() => onCreate(null)}>＋ Publicar excedente</button></header>{!approved && <div className="verification-banner"><b>{reviewLabel}</b><span>Por seguridad, el comercio podrá publicar cuando RESCASAP verifique RUT y habilitación bromatológica. Contacto: liahannay.studio@gmail.com</span>{!data.merchantApplication && <form className="verification-application" onSubmit={onApply}><label className="field"><span>Titular o razón social</span><input name="legalName" required/></label><label className="field"><span>RUT</span><input name="businessRut" inputMode="numeric" pattern="[0-9]{12}" placeholder="12 dígitos" required/></label><label className="field"><span>N.º de habilitación</span><input name="habilitationNumber" required/></label><label className="legal-check"><input type="checkbox" name="acceptedMerchantAgreement" required/><span>Acepto el <a href="/comercios" target="_blank">Acuerdo para Comercios</a>.</span></label><button className="primary-cta" disabled={busy}>{busy ? 'Enviando…' : 'Enviar solicitud'} <span>→</span></button></form>}</div>}<div className="merchant-metrics"><article><span>PUBLICADOS HOY</span><strong>{active}</strong><small>packs activos</small></article><article><span>RESERVAS</span><strong>{reserved}</strong><small>confirmadas</small></article><article><span>COMIDA RESCATADA</span><strong>{kg.toLocaleString('es-UY', { maximumFractionDigits: 1 })} kg</strong><small>estimados</small></article><article><span>VALOR RECUPERADO</span><strong>{money(revenue)}</strong><small>en ventas rescate</small></article></div><div className="merchant-layout"><div><section className="merchant-section"><div className="merchant-section-title"><div><p className="eyebrow dark">INVENTARIO DE HOY</p><h2>Packs publicados</h2></div><button disabled={!approved} onClick={() => onCreate(null)}>Nuevo pack ＋</button></div>{packs.length ? <div className="merchant-pack-list">{packs.map((pack) => <article key={pack.id}><div className={`mini-art ${pack.visual_tone}`}>{toneMarks[pack.visual_tone] ?? '🥡'}</div><div className="merchant-pack-main"><span className={`status-chip ${pack.status}`}>{statusCopy[pack.status]}</span><h3>{pack.title}</h3><p>Retiro {pack.pickup_start}–{pack.pickup_end} · {pack.quantity_available}/{pack.quantity_total} disponibles</p><div className="stock-bar"><i style={{ width: `${Math.max(0, pack.quantity_available / pack.quantity_total) * 100}%` }}/></div></div><div className="merchant-pack-value"><b>{money(pack.current_price)}</b><small>{pack.reservation_count} reservas</small></div><div className="more-menu">{pack.status === 'published' ? <><button disabled={busy} onClick={() => onStatus(pack, 'unsold')}>Marcar no vendido</button><button disabled={busy} onClick={() => onStatus(pack, 'cancelled')}>Cancelar</button></> : <button disabled={busy || !approved} onClick={() => onStatus(pack, 'published')}>Republicar</button>}</div></article>)}</div> : <div className="empty-state"><b>{approved ? 'No hay packs publicados.' : 'Tu comercio todavía no puede publicar.'}</b><p>{approved ? 'Creá el primero en menos de un minuto.' : 'Te avisaremos cuando termine la verificación.'}</p></div>}</section><section className="merchant-section templates-section"><div className="merchant-section-title"><div><p className="eyebrow dark">ATAJOS</p><h2>Plantillas recurrentes</h2></div></div>{data.templates.length ? <div className="template-grid">{data.templates.map((template) => <button disabled={!approved} key={template.id} onClick={() => onCreate(template)}><span>↻</span><b>{template.title}</b><small>{money(template.rescue_price)} · {template.pickup_start}–{template.pickup_end}</small><em>Usar plantilla →</em></button>)}</div> : <div className="template-empty"><span>↻</span><p><b>Publicá más rápido mañana.</b>Marcá “Guardar como plantilla” al crear un pack.</p></div>}</section></div><aside className="merchant-side"><section className="collect-card"><p className="eyebrow">VALIDAR RETIRO</p><h2>Ingresá el código</h2><p>Pedile al cliente el código de 6 caracteres.</p><form onSubmit={onCollect}><input id="collect-code" name="code" placeholder="ABC-123" pattern="[A-Za-z]{3}-[0-9]{3}" maxLength={7} required/><button disabled={busy}>Confirmar retiro →</button></form></section><section className="future-card"><span>PRÓXIMA MEJORA</span><h3>Producción más precisa</h3><p>El historial ayudará a detectar qué se vende, a qué hora y a qué precio.</p><div><i/>Analítica preparada</div></section><section className="tip-card"><b>Idea para hoy</b><p>Los packs publicados al menos 90 min antes del cierre tienen más tiempo para encontrar rescatista.</p></section></aside></div></section>;
 }
 
 function CreatePack({ business, templates, seed, busy, error, onClose, onSubmit }: { business: Business | null; templates: Template[]; seed: Partial<Template> | null; busy: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

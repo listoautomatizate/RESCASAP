@@ -5,7 +5,7 @@ MVP funcional, responsive y mobile-first para rescatar excedentes de comercios u
 La propuesta de producto sigue tres capas:
 
 1. **Vender:** recuperar valor con packs de excedentes a precio rescate.
-2. **Redistribuir:** preparar la donación de lo apto que no se venda.
+2. **Aprovechar:** dar salida comercial al excedente del día.
 3. **Aprender:** usar el historial para producir con menos merma.
 
 ## Qué incluye
@@ -31,7 +31,8 @@ La propuesta de producto sigue tres capas:
 - reducción automática opcional antes del cierre;
 - estados publicado, reservado/agostado, retirado, cancelado y no vendido;
 - validación del retiro por código;
-- base visual y de datos preparada para donación y analítica predictiva.
+- control de solicitud, aceptación contractual y verificación previa del comercio;
+- base visual y de datos preparada para analítica predictiva.
 
 ## Ejecutar localmente
 
@@ -75,6 +76,9 @@ pnpm db:generate  # genera migraciones desde db/schema.ts
 app/
   api/                  rutas de lectura y mutación
   chatgpt-auth.ts       identidad administrada por la plataforma
+  terminos/             términos y condiciones públicos
+  privacidad/           política de privacidad pública
+  comercios/            acuerdo electrónico para comercios
   rescata-app.tsx       experiencia de consumidor y comercio
   globals.css           sistema visual responsive
 db/
@@ -102,7 +106,8 @@ Los índices priorizan las consultas frecuentes: packs por estado/horario, packs
 - El contenido del pack es sorpresa, pero se comunica peso estimado y descripción para reducir incertidumbre.
 - La reducción automática se evalúa en horario de Uruguay cuando se consulta el inventario.
 - La geolocalización requiere consentimiento y no se persiste.
-- Donaciones y predicción aparecen como módulos futuros, sin agregar complejidad operativa prematura.
+- La app no incluye donaciones; se concentra en vender excedentes y aprender del historial.
+- Los comercios nuevos permanecen pendientes y no pueden publicar hasta verificar RUT y habilitación.
 
 ## Próximos pasos para producción
 
@@ -111,10 +116,9 @@ Los índices priorizan las consultas frecuentes: packs por estado/horario, packs
 3. Firmar y escanear QR; registrar auditoría de cada cambio de estado.
 4. Agregar vencimiento automático, reembolsos y reglas de cancelación.
 5. Incorporar notificaciones push, email o WhatsApp transaccional.
-6. Revisar términos, bromatología, facturación, privacidad y operativa de donaciones con asesoría local.
-7. Conectar organizaciones habilitadas y trazabilidad para la capa de donación.
-8. Entrenar sugerencias de producción únicamente con suficiente historial y explicaciones visibles.
-9. Añadir monitoreo, backups, rate limiting, pruebas E2E y panel de soporte.
+6. Completar la inscripción de bases de datos ante la URCDP y revisar la documentación legal con asesoría local.
+7. Entrenar sugerencias de producción únicamente con suficiente historial y explicaciones visibles.
+8. Añadir monitoreo, backups, rate limiting, pruebas E2E y panel de soporte.
 
 ## Estado de preparación
 

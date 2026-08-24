@@ -19,8 +19,10 @@ export async function POST(request: Request) {
   }
   await ensureDatabase();
   const profile = await env.DB.prepare("SELECT role FROM users WHERE id = ? AND role = 'merchant'").bind(authUser.userId).first();
-  const business = await env.DB.prepare('SELECT id FROM businesses WHERE owner_id = ? LIMIT 1').bind(authUser.userId).first<{ id: string }>();
-  if (!profile || !business) return NextResponse.json({ error: 'Configurá primero tu cuenta de comercio.' }, { status: 403 });
+  const business = await env.DB.prepare(`SELECT b.id FROM businesses b
+    JOIN merchant_applications a ON a.business_id = b.id AND a.status = 'verified'
+    WHERE b.owner_id = ? LIMIT 1`).bind(authUser.userId).first<{ id: string }>();
+  if (!profile || !business) return NextResponse.json({ error: 'Tu comercio debe estar verificado antes de publicar.' }, { status: 403 });
 
   const id = `pack-${crypto.randomUUID()}`;
   const templateId = body.saveTemplate ? `tpl-${crypto.randomUUID()}` : null;

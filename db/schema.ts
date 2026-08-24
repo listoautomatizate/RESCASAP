@@ -77,3 +77,24 @@ export const reservations = sqliteTable('reservations', {
   index('idx_reservations_user_id_created_at').on(table.userId, table.createdAt),
   index('idx_reservations_pack_id_status').on(table.packId, table.status),
 ]);
+
+export const legalAcceptances = sqliteTable('legal_acceptances', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  documentType: text('document_type').notNull(),
+  documentVersion: text('document_version').notNull(),
+  acceptedAt: text('accepted_at').notNull(),
+}, (table) => [
+  index('idx_legal_acceptances_user_document').on(table.userId, table.documentType, table.documentVersion),
+]);
+
+export const merchantApplications = sqliteTable('merchant_applications', {
+  businessId: text('business_id').primaryKey(),
+  legalName: text('legal_name').notNull(),
+  rut: text('rut').notNull(),
+  habilitationNumber: text('habilitation_number').notNull(),
+  status: text('status', { enum: ['pending', 'verified', 'rejected'] }).notNull().default('pending'),
+  termsVersion: text('terms_version').notNull(),
+  acceptedAt: text('accepted_at').notNull(),
+  reviewedAt: text('reviewed_at'),
+});

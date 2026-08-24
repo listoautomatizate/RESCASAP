@@ -77,12 +77,31 @@ async function initialize() {
       created_at TEXT NOT NULL,
       collected_at TEXT
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS legal_acceptances (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      document_type TEXT NOT NULL,
+      document_version TEXT NOT NULL,
+      accepted_at TEXT NOT NULL,
+      UNIQUE(user_id, document_type, document_version)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS merchant_applications (
+      business_id TEXT PRIMARY KEY,
+      legal_name TEXT NOT NULL,
+      rut TEXT NOT NULL,
+      habilitation_number TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','verified','rejected')),
+      terms_version TEXT NOT NULL,
+      accepted_at TEXT NOT NULL,
+      reviewed_at TEXT
+    )`),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON businesses(owner_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_pack_templates_business_id ON pack_templates(business_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_packs_status_pickup_end ON packs(status, pickup_end)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_packs_business_id ON packs(business_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reservations_user_id_created_at ON reservations(user_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reservations_pack_id_status ON reservations(pack_id, status)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user_document ON legal_acceptances(user_id, document_type, document_version)'),
     db.prepare('PRAGMA optimize'),
   ]);
 
