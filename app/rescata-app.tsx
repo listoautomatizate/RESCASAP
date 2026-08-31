@@ -2,10 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { AppUser } from './auth';
+import { createDemoData } from './demo-data';
 import LegalFooter from './legal-footer';
+import { registerRescasapTools } from './webmcp';
 
-type Profile = { id: string; email: string; name: string; role: 'consumer' | 'merchant'; neighborhood: string };
-type Pack = {
+export type Profile = { id: string; email: string; name: string; role: 'consumer' | 'merchant'; neighborhood: string };
+export type Pack = {
   id: string; business_id: string; business_name: string; category: string; title: string; description: string;
   normal_price: number; rescue_price: number; current_price: number; quantity_total: number; quantity_available: number;
   estimated_kg: number; pickup_start: string; pickup_end: string; status: 'published' | 'sold_out' | 'cancelled' | 'unsold';
@@ -13,22 +15,22 @@ type Pack = {
   address: string; neighborhood: string; latitude: number; longitude: number; rating: number;
   mercado_pago_enabled: boolean;
 };
-type Reservation = {
+export type Reservation = {
   id: string; pack_id: string; title: string; business_name: string; address: string; neighborhood: string;
   pickup_start: string; pickup_end: string; pickup_code: string; unit_price: number; quantity: number;
   status: 'reserved' | 'collected' | 'cancelled' | 'no_show'; payment_status: 'paid' | 'pay_at_store' | 'refunded';
   online_payment_status: 'initiating' | 'created' | 'processing' | 'paid' | 'failed' | 'cancelled' | 'refunded' | null;
   estimated_kg?: number; created_at: string;
 };
-type MerchantPack = Pack & { reservation_count: number; revenue: number };
-type Template = {
+export type MerchantPack = Pack & { reservation_count: number; revenue: number };
+export type Template = {
   id: string; title: string; description: string; normal_price: number; rescue_price: number; estimated_kg: number;
   pickup_start: string; pickup_end: string; auto_discount: number; final_price: number | null; discount_minutes: number | null;
 };
-type Business = { id: string; name: string; category: string; address: string; neighborhood: string };
-type MerchantApplication = { status: 'pending' | 'verified' | 'rejected'; legal_name: string; rut: string; habilitation_number: string };
-type MerchantPayment = { configured: boolean; status: 'not_connected' | 'connected' | 'expired' | 'revoked'; connectedAt: string | null };
-type BootstrapData = {
+export type Business = { id: string; name: string; category: string; address: string; neighborhood: string };
+export type MerchantApplication = { status: 'pending' | 'verified' | 'rejected'; legal_name: string; rut: string; habilitation_number: string };
+export type MerchantPayment = { configured: boolean; status: 'not_connected' | 'connected' | 'expired' | 'revoked'; connectedAt: string | null };
+export type BootstrapData = {
   authUser: AppUser; profile: Profile | null; legalAccepted: boolean; packs: Pack[]; reservations: Reservation[];
   merchantBusiness: Business | null; merchantApplication: MerchantApplication | null; merchantPayment: MerchantPayment;
   merchantPacks: MerchantPack[]; templates: Template[];
@@ -90,13 +92,13 @@ function CodeGrid({ code }: { code: string }) {
   );
 }
 
-export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
-  const [data, setData] = useState<BootstrapData | null>(null);
-  const [loading, setLoading] = useState(Boolean(authUser));
+export default function RescataApp({ authUser, demoMode = false }: { authUser: AppUser | null; demoMode?: boolean }) {
+  const [data, setData] = useState<BootstrapData | null>(() => demoMode && authUser ? createDemoData(authUser) : null);
+  const [loading, setLoading] = useState(Boolean(authUser) && !demoMode);
   const [error, setError] = useState('');
   const [view, setView] = useState<View>('explore');
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
-  const [sheet, setSheet] = useState<'detail' | 'checkout' | 'success' | 'create' | null>(null);
+  const [sheet, setSheet] = useState<'detail' | 'checkout' | 'success' | 'create' | 'compare' | null>(null);
   const [activeReservation, setActiveReservation] = useState<Reservation | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'paid' | 'pay_at_store'>('pay_at_store');
   const [busy, setBusy] = useState(false);
@@ -108,9 +110,13 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
   const [templateSeed, setTemplateSeed] = useState<Partial<Template> | null>(null);
   const [email, setEmail] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [agentPackIds, setAgentPackIds] = useState<string[] | null>(null);
+  const [agentSummary, setAgentSummary] = useState('');
+  const [comparisonPacks, setComparisonPacks] = useState<Pack[]>([]);
+  const [webMcpStatus, setWebMcpStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
 
   const refresh = useCallback(async () => {
-    if (!authUser) return;
+    if (!authUser || demoMode) return;
     try {
       const result = await api<BootstrapData>('/api/bootstrap');
       setData(result);
@@ -120,7 +126,7 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     } finally {
       setLoading(false);
     }
-  }, [authUser]);
+  }, [authUser, demoMode]);
 
   useEffect(() => {
     const firstLoad = window.setTimeout(refresh, 0);
@@ -161,12 +167,54 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
 
   const visiblePacks = useMemo(() => {
     if (!data) return [];
-    return data.packs
+    const filtered = data.packs
       .filter((pack) => pack.status === 'published' && pack.quantity_available > 0)
       .filter((pack) => category === 'Todos' || pack.category === category)
       .filter((pack) => `${pack.title} ${pack.business_name} ${pack.neighborhood}`.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => location ? distanceKm(location, a) - distanceKm(location, b) : a.pickup_end.localeCompare(b.pickup_end));
-  }, [data, category, query, location]);
+    if (!agentPackIds) return filtered;
+    return filtered
+      .filter((pack) => agentPackIds.includes(pack.id))
+      .sort((left, right) => agentPackIds.indexOf(left.id) - agentPackIds.indexOf(right.id));
+  }, [data, category, query, location, agentPackIds]);
+
+  useEffect(() => {
+    if (!data || data.profile?.role !== 'consumer') return;
+    const controller = new AbortController();
+    let active = true;
+    void registerRescasapTools(data.packs, {
+      onShortlist: (packIds, summary) => {
+        setView('explore');
+        setQuery('');
+        setCategory('Todos');
+        setAgentPackIds(packIds);
+        setAgentSummary(summary);
+        setSheet(null);
+      },
+      onCompare: (packIds) => {
+        const packs = packIds
+          .map((packId) => data.packs.find((pack) => pack.id === packId))
+          .filter((pack): pack is Pack => Boolean(pack));
+        setComparisonPacks(packs);
+        setSheet('compare');
+      },
+      onPrepare: (packId) => {
+        const pack = data.packs.find((candidate) => candidate.id === packId);
+        if (!pack) return;
+        setSelectedPack(pack);
+        setPaymentMethod('pay_at_store');
+        setSheet('checkout');
+      },
+    }, controller).then((count) => {
+      if (active) setWebMcpStatus(count === 3 ? 'ready' : 'unavailable');
+    }).catch(() => {
+      if (active) setWebMcpStatus('unavailable');
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [data]);
 
   const impact = useMemo(() => {
     const rescued = data?.reservations.filter((item) => ['reserved', 'collected'].includes(item.status)) ?? [];
@@ -263,6 +311,25 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     if (!selectedPack) return;
     setBusy(true); setError('');
     try {
+      if (demoMode) {
+        const reservation: Reservation = {
+          id: `demo-${Date.now()}`, pack_id: selectedPack.id, title: selectedPack.title,
+          business_name: selectedPack.business_name, address: selectedPack.address, neighborhood: selectedPack.neighborhood,
+          pickup_start: selectedPack.pickup_start, pickup_end: selectedPack.pickup_end, pickup_code: 'DEM-001',
+          unit_price: selectedPack.current_price, quantity: 1, status: 'reserved', payment_status: 'pay_at_store',
+          online_payment_status: null, estimated_kg: selectedPack.estimated_kg, created_at: new Date().toISOString(),
+        };
+        setData((current) => current ? {
+          ...current,
+          packs: current.packs.map((pack) => pack.id === selectedPack.id
+            ? { ...pack, quantity_available: Math.max(0, pack.quantity_available - 1) }
+            : pack),
+          reservations: [reservation, ...current.reservations],
+        } : current);
+        setActiveReservation(reservation);
+        setSheet('success');
+        return;
+      }
       if (paymentMethod === 'paid') {
         const result = await api<{ checkoutUrl: string }>('/api/payments/mercadopago', {
           method: 'POST', body: JSON.stringify({ packId: selectedPack.id }),
@@ -283,6 +350,17 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     if (!window.confirm(onlinePaid ? '¿Querés cancelar? Solicitaremos la devolución a Mercado Pago.' : '¿Querés cancelar este rescate? El pack volverá a quedar disponible.')) return;
     setBusy(true);
     try {
+      if (demoMode) {
+        setData((current) => current ? {
+          ...current,
+          packs: current.packs.map((pack) => pack.id === reservation.pack_id
+            ? { ...pack, quantity_available: Math.min(pack.quantity_total, pack.quantity_available + 1) }
+            : pack),
+          reservations: current.reservations.map((item) => item.id === reservation.id ? { ...item, status: 'cancelled' } : item),
+        } : current);
+        showToast('Reserva de demostración cancelada.');
+        return;
+      }
       await api(`/api/reservations/${reservation.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
       await refresh(); showToast('Reserva cancelada.');
     } catch (caught) { showToast(caught instanceof Error ? caught.message : 'No pudimos cancelar.'); }
@@ -348,6 +426,7 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
           {authMessage && <p className="auth-success">✓ {authMessage}</p>}
           {error && <p className="form-error">{error}</p>}
           <small>Ingreso seguro por email. No necesitás crear una contraseña.</small>
+          <a className="demo-entry" href="/demo"><span>✦</span><div><b>Probar la demo WebMCP</b><small>Entrá sin registro ni pago para evaluar las herramientas del challenge.</small></div><em>→</em></a>
           <p className="pilot-auth-note">Estamos abriendo la primera versión pública. Los packs marcados como DEMO sirven para probar la experiencia y no generan un retiro real.</p>
         </section>
       </main><LegalFooter /></>
@@ -402,17 +481,17 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
     <main className="app-shell">
       <header className="topbar">
         <button className="brand button-brand" onClick={() => setView(isMerchant ? 'merchant' : 'explore')}>RESCASAP</button>
-        <div className="mode-switch">
+        {demoMode ? <span className="demo-mode-chip">WEBMCP DEMO</span> : <div className="mode-switch">
           <button className={!isMerchant ? 'active' : ''} onClick={() => switchRole('consumer')} disabled={busy}>Rescatar</button>
           <button className={isMerchant ? 'active' : ''} onClick={() => switchRole('merchant')} disabled={busy}>Mi comercio</button>
-        </div>
+        </div>}
         <div className="top-actions">
           {!isMerchant && <button className="round-button" aria-label="Buscar" onClick={() => document.getElementById('search')?.focus()}>⌕</button>}
           <button className="profile-button" aria-label="Abrir perfil" onClick={() => setView('impact')}>{data.profile.name.slice(0, 2).toUpperCase()}</button>
         </div>
       </header>
 
-      <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios DEMO son ejemplos. En comercios verificados podés pagar al retirar y, cuando lo vinculen, también con Mercado Pago.</span></aside>
+      {demoMode ? <aside className={`webmcp-banner ${webMcpStatus}`}><div><b>WEBMCP CHALLENGE DEMO</b><span>Sin login, compra ni retiro real. Probá el flujo con el agente o manualmente.</span></div><em>{webMcpStatus === 'ready' ? '● 3 site tools disponibles' : webMcpStatus === 'checking' ? '○ Conectando site tools…' : '○ Abrí esta página en ChatGPT o Chrome 149+'}</em></aside> : <aside className="pilot-banner"><b>VERSIÓN PILOTO</b><span>Los comercios DEMO son ejemplos. En comercios verificados podés pagar al retirar y, cuando lo vinculen, también con Mercado Pago.</span></aside>}
 
       {isMerchant ? (
         <><MerchantPaymentBar data={data}/><MerchantDashboard data={data} busy={busy} onCreate={(seed) => { setTemplateSeed(seed ?? null); setSheet('create'); }} onStatus={updatePackStatus} onCollect={collectByCode} onApply={applyAsMerchant} /></>
@@ -430,8 +509,9 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
             </div>
           </section>
           <section className="discovery-tools">
-            <label className="search-box" htmlFor="search"><span>⌕</span><input id="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar comercio, pack o barrio"/><kbd>UYU</kbd></label>
-            <div className="category-row">{categories.map((item) => <button className={category === item ? 'active' : ''} onClick={() => setCategory(item)} key={item}><span>{item === 'Todos' ? '✦' : categoryMarks[item] ?? '•'}</span>{item}</button>)}</div>
+            {agentPackIds && <div className="agent-shortlist" role="status"><span>✦</span><div><b>Selección del agente</b><p>{agentSummary}</p></div><button onClick={() => { setAgentPackIds(null); setAgentSummary(''); }}>Ver todos</button></div>}
+            <label className="search-box" htmlFor="search"><span>⌕</span><input id="search" value={query} onChange={(event) => { setQuery(event.target.value); setAgentPackIds(null); setAgentSummary(''); }} placeholder="Buscar comercio, pack o barrio"/><kbd>UYU</kbd></label>
+            <div className="category-row">{categories.map((item) => <button className={category === item ? 'active' : ''} onClick={() => { setCategory(item); setAgentPackIds(null); setAgentSummary(''); }} key={item}><span>{item === 'Todos' ? '✦' : categoryMarks[item] ?? '•'}</span>{item}</button>)}</div>
           </section>
           <section className="feed" aria-labelledby="packs-title">
             <div className="section-heading"><div><p className="eyebrow dark">LISTOS PARA RESCATAR</p><h2 id="packs-title">Se van hoy</h2></div><button className="text-button" onClick={() => setView('map')}>Ver mapa ↗</button></div>
@@ -451,7 +531,7 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
       ) : view === 'history' ? (
         <HistoryView reservations={data.reservations} onOpen={(reservation) => { setActiveReservation(reservation); setSheet('success'); }} onCancel={cancelReservation} />
       ) : (
-        <ImpactView impact={impact} profile={data.profile} onSignOut={signOut} busy={busy} />
+        <ImpactView impact={impact} profile={data.profile} onSignOut={demoMode ? () => window.location.assign('/') : signOut} busy={busy} />
       )}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
@@ -477,6 +557,7 @@ export default function RescataApp({ authUser }: { authUser: AppUser | null }) {
         {sheet === 'checkout' && selectedPack && <Checkout pack={selectedPack} paymentMethod={paymentMethod} onPaymentMethod={setPaymentMethod} busy={busy} error={error} onBack={() => setSheet('detail')} onReserve={reserve} />}
         {sheet === 'success' && activeReservation && <ReservationTicket reservation={activeReservation} onClose={() => { setSheet(null); setActiveReservation(null); }} />}
         {sheet === 'create' && <CreatePack business={data.merchantBusiness} templates={data.templates} seed={templateSeed} busy={busy} error={error} onClose={() => { setSheet(null); setTemplateSeed(null); setError(''); }} onSubmit={createPack} />}
+        {sheet === 'compare' && <PackComparison packs={comparisonPacks} onClose={() => setSheet(null)} onSelect={(pack) => { setSelectedPack(pack); setPaymentMethod('pay_at_store'); setSheet('checkout'); }} />}
       </div>}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
       {error && !sheet && <div className="global-error">{error}<button onClick={refresh}>Reintentar</button></div>}
@@ -503,6 +584,10 @@ function Checkout({ pack, paymentMethod, onPaymentMethod, busy, error, onBack, o
     <div className="checkout-summary"><p><span>1 pack</span><b>{money(pack.current_price)}</b></p><p><span>Cargo de servicio</span><b>$ 0</b></p><p className="total"><span>Total</span><b>{money(pack.current_price)}</b></p></div>
     <label className="terms"><input type="checkbox" defaultChecked required/> Entiendo que el contenido es sorpresa, debo retirar dentro del horario y se aplican los <a href="/terminos" target="_blank">términos</a>.</label>{error && <p className="form-error">{error}</p>}<button className="primary-cta" disabled={busy} onClick={onReserve}>{busy ? (paymentMethod === 'paid' ? 'Abriendo Mercado Pago…' : 'Reservando…') : demoBusinessIds.has(pack.business_id) ? 'Probar reserva' : paymentMethod === 'paid' ? 'Pagar con Mercado Pago' : 'Confirmar reserva'} <span>→</span></button>
   </section>;
+}
+
+function PackComparison({ packs, onClose, onSelect }: { packs: Pack[]; onClose: () => void; onSelect: (pack: Pack) => void }) {
+  return <section className="sheet comparison-sheet"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow dark">COMPARACIÓN DEL AGENTE</p><h2>Elegí tu mejor rescate.</h2><p className="comparison-intro">El agente organizó la información; la decisión y la confirmación siempre son tuyas.</p><div className="comparison-list">{packs.map((pack) => <article key={pack.id}><div className={`comparison-mark ${pack.visual_tone}`}>{toneMarks[pack.visual_tone] ?? '🥡'}</div><div className="comparison-main"><small>{pack.business_name} · {pack.neighborhood}</small><h3>{pack.title}</h3><dl><div><dt>Precio</dt><dd>{money(pack.current_price)}</dd></div><div><dt>Ahorrás</dt><dd>{money(pack.normal_price - pack.current_price)}</dd></div><div><dt>Comida</dt><dd>≈ {pack.estimated_kg.toLocaleString('es-UY')} kg</dd></div><div><dt>Retiro</dt><dd>{pack.pickup_start}–{pack.pickup_end}</dd></div></dl></div><button onClick={() => onSelect(pack)}>Elegir <span>→</span></button></article>)}</div><div className="human-control-note"><span>✓</span><p><b>Control humano incluido</b>Elegir abre la revisión final. No reserva ni cobra automáticamente.</p></div></section>;
 }
 
 function ReservationTicket({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {

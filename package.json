@@ -1,6 +1,6 @@
 {
   "name": "rescata-uy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -10,6 +10,7 @@
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test:webmcp": "node --experimental-strip-types --test tests/webmcp.test.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
