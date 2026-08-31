@@ -52,4 +52,4 @@ git diff fbb97d9..HEAD --stat
 git diff fbb97d9..HEAD -- app/webmcp.ts app/demo app/rescata-app.tsx tests docs README.md LICENSE
 ```
 
-The final challenge commit must retain an August 31–September 3 timestamp and must be pushed to the public repository before submission.
+The first challenge commit, `f151ac5`, was created on August 31 and pushed to the public `main` branch the same day. Any subsequent technical fixes remain separately dated challenge-period commits.
