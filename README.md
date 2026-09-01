@@ -2,7 +2,7 @@
 
 RESCASAP helps people in Uruguay rescue same-day surplus food from local businesses at a reduced price. Its WebMCP extension lets an AI agent search and compare live rescue packs, then prepare one for review while the person keeps control of the final reservation.
 
-> **Submission status:** the [public source repository](https://github.com/listoautomatizate/RESCASAP) is ready. The WebMCP route at `https://rescasap.uy/demo` is implemented and locally validated; production deployment remains pending entrant approval.
+> **Submission status:** the [public source repository](https://github.com/listoautomatizate/RESCASAP) and the no-login WebMCP demo at [`https://rescasap.uy/demo`](https://rescasap.uy/demo) are live and evaluator-ready. The Devpost submission has not been sent.
 
 ## Why WebMCP belongs here
 
